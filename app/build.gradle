@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.application'
+}
+
+def runNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as Integer
+
+android {
+    namespace 'pl.mariusz.postprzerywany'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'pl.mariusz.postprzerywany'
+        minSdk 24
+        targetSdk 34
+        versionCode runNumber
+        versionName "1.0.${runNumber}"
+    }
+
+    // Same key as Dziennik FBW: both apps trust each other (signature permission) and every build installs as an update
+    signingConfigs {
+        release {
+            storeFile file('fbw.keystore')
+            storePassword 'dziennikfbw'
+            keyAlias 'fbw'
+            keyPassword 'dziennikfbw'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
