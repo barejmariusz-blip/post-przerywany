@@ -80,6 +80,14 @@ body.idle .ringbox{--g1:var(--dim);--g2:var(--dim);--g3:var(--dim)}
 .center .pct{margin-top:8px;font-family:var(--display);font-weight:600;font-size:13px;padding:3px 10px;border-radius:999px;background:var(--surface2);color:var(--muted)}
 .center .pct.done{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
 
+.stline{width:100%;display:flex;flex-direction:column;gap:6px;margin:2px 0 10px;min-height:0}
+.stline:empty{display:none}
+.stline .r1{display:flex;align-items:center;gap:8px;font-size:13px}
+.stline .r1 .d{width:9px;height:9px;border-radius:50%;flex:none;box-shadow:0 0 10px var(--sc);background:var(--sc)}
+.stline .r1 b{font-weight:600}
+.stline .r1 .nx{margin-left:auto;color:var(--muted);white-space:nowrap}
+.stline .tr{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.stline .tr i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--sc),var(--nc))}
 .times{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:4px}
 .tcell{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px 14px;text-align:left;display:flex;justify-content:space-between;align-items:center}
 .tcell .l{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
@@ -320,15 +328,24 @@ const IC={
 const ic=(n,cls='')=>`<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]||''}</svg>`;
 
 /* Typical body states during a fast — rough guide used by most fasting apps */
-const STAGES=[
-  {h:0, n:'Wzrost cukru', ic:'utensils', c:'#7dd3fc', d:'Organizm trawi ostatni posiłek. Cukier i insulina we krwi rosną.'},
-  {h:3, n:'Spadek cukru', ic:'drop', c:'#60a5fa', d:'Cukier wraca do normy, insulina zaczyna spadać.'},
-  {h:8, n:'Zapasy glikogenu', ic:'wave', c:'#a78bfa', d:'Energia idzie głównie z glikogenu zmagazynowanego w wątrobie.'},
-  {h:12,n:'Spalanie tłuszczu', ic:'flame', c:'#ff8a5b', d:'Glikogen się kończy. Organizm coraz mocniej sięga po tłuszcz.'},
-  {h:18,n:'Ketoza', ic:'bolt', c:'#ff5e7a', d:'Wątroba produkuje więcej ciał ketonowych, które zasilają mózg i mięśnie.'},
-  {h:24,n:'Autofagia', ic:'recycle', c:'#e879f9', d:'Nasila się „sprzątanie” komórek — recykling zużytych elementów.'},
-  {h:48,n:'Hormon wzrostu', ic:'up', c:'#b26bff', d:'Poziom hormonu wzrostu jest wyraźnie wyższy niż na starcie.'},
-  {h:72,n:'Głęboka odnowa', ic:'spark', c:'#fbbf24', d:'Bardzo długi post. Rób go tylko świadomie i najlepiej pod okiem lekarza.'},
+const STAGES=[ // m = main milestone: drawn on the ring and announced by notification
+  {h:0, n:'Trawienie', ic:'utensils', c:'#7dd3fc', d:'Organizm trawi ostatni posiłek. Cukier i insulina we krwi rosną.'},
+  {h:2, n:'Szczyt insuliny', ic:'utensils', c:'#7cc8fb', d:'Insulina jest najwyżej — energia płynie prosto z posiłku, nadmiar trafia do zapasów.'},
+  {h:4, n:'Spadek cukru', ic:'drop', c:'#60a5fa', d:'Cukier wraca do normy, insulina wyraźnie spada.', m:1},
+  {h:6, n:'Pusty żołądek', ic:'drop', c:'#6f9cf8', d:'Trawienie się kończy. Może pojawić się pierwsza fala głodu — minie po kilkunastu minutach.'},
+  {h:8, n:'Zapasy glikogenu', ic:'wave', c:'#818cf8', d:'Energia idzie głównie z glikogenu zmagazynowanego w wątrobie.', m:1},
+  {h:10,n:'Niska insulina', ic:'wave', c:'#a78bfa', d:'Insulina jest nisko, więc komórki tłuszczowe zaczynają uwalniać tłuszcz do krwi.'},
+  {h:12,n:'Start spalania tłuszczu', ic:'flame', c:'#f59e6b', d:'Glikogen się kończy. Organizm coraz mocniej sięga po tłuszcz.', m:1},
+  {h:14,n:'Spalanie na pełnych obrotach', ic:'flame', c:'#ff8a5b', d:'Tłuszcz ma coraz większy udział w produkcji energii.'},
+  {h:16,n:'Wczesna ketoza', ic:'bolt', c:'#ff7166', d:'Wątroba zaczyna produkować więcej ciał ketonowych.', m:1},
+  {h:18,n:'Ketoza', ic:'bolt', c:'#ff5e7a', d:'Ciała ketonowe zasilają mózg i mięśnie. Wiele osób czuje wtedy przypływ skupienia.', m:1},
+  {h:20,n:'Głębsza ketoza', ic:'bolt', c:'#f4609b', d:'Poziom ketonów dalej rośnie, cukier we krwi jest stabilnie niski.'},
+  {h:24,n:'Autofagia', ic:'recycle', c:'#e879f9', d:'Nasila się „sprzątanie” komórek — recykling zużytych elementów.', m:1},
+  {h:30,n:'Głód słabnie', ic:'recycle', c:'#d77cfa', d:'Fale głodu są zwykle rzadsze i słabsze niż w pierwszej dobie.'},
+  {h:36,n:'Hormon wzrostu rośnie', ic:'up', c:'#c474fb', d:'Poziom hormonu wzrostu rośnie, co pomaga chronić mięśnie.', m:1},
+  {h:48,n:'Wysoki hormon wzrostu', ic:'up', c:'#b26bff', d:'Hormon wzrostu jest wyraźnie wyższy niż na starcie postu.', m:1},
+  {h:60,n:'Najniższa insulina', ic:'spark', c:'#d99a4e', d:'Insulina jest najniżej w całym poście. Pamiętaj o elektrolitach.'},
+  {h:72,n:'Głęboka odnowa', ic:'spark', c:'#fbbf24', d:'Bardzo długi post. Rób go tylko świadomie i najlepiej pod okiem lekarza.', m:1},
 ];
 
 const PLANS=[
@@ -460,6 +477,7 @@ function planLabel(){const p=planObj();return p.id==='custom'?p.f+':'+(24-p.f>0?
 const goalH=()=>S.cur?S.cur.goalH:planObj().f;
 const fastsSorted=()=>S.fasts.slice().sort((a,b)=>a.start-b.start);
 const lastFast=()=>{let l=null;for(const f of S.fasts)if(!l||f.end>l.end)l=f;return l};
+function mixHex(a,b,t){const p=x=>[1,3,5].map(i=>parseInt(x.slice(i,i+2),16));const A=p(a),B=p(b);return '#'+A.map((v,i)=>Math.round(v+(B[i]-v)*Math.max(0,Math.min(1,t))).toString(16).padStart(2,'0')).join('')}
 function stageAt(h){let i=0;STAGES.forEach((s,k)=>{if(h>=s.h)i=k});return i}
 
 /* eating window derived from last finished fast */
@@ -478,7 +496,7 @@ function syncNative(){
     const end=S.cur.start+S.cur.goalH*H;
     if(S.notif.before>0) al.push({at:end-S.notif.before*MIN,title:'Jeszcze '+S.notif.before+' min postu',body:'Twój post '+S.cur.goalH+' h kończy się o '+clock(end)+'. Wytrzymaj, prawie meta!'});
     if(S.notif.end) al.push({at:end,title:'Cel osiągnięty — '+S.cur.goalH+' h postu',body:'Brawo! Możesz zakończyć post albo jechać dalej po kolejne etapy.',act:'end'});
-    for(const st of STAGES) if(st.h>=12&&st.h<S.cur.goalH&&S.notif.end) al.push({at:S.cur.start+st.h*H,title:'Nowy etap: '+st.n,body:st.d});
+    for(const st of STAGES) if(st.m&&st.h>=12&&st.h<S.cur.goalH&&S.notif.end) al.push({at:S.cur.start+st.h*H,title:'Nowy etap: '+st.n,body:st.d});
   } else {
     const w=windowInfo();
     if(w&&w.open&&S.notif.win){
@@ -558,7 +576,7 @@ function render(){
     .map(([k,i,l])=>`<button type="button" data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':''}>${ic(i)}${l}</button>`).join('');
   const v={today:vToday,hist:vHist,prog:vProg,set:vSet}[ui.tab]();
   $('#app').innerHTML=v;
-  const sn=document.querySelector('.stage.now'); if(sn) sn.parentNode.scrollLeft=sn.offsetLeft-16;
+  const sn=document.querySelector('.stage.now'); if(sn){const pr=sn.parentNode; pr.scrollLeft+=sn.getBoundingClientRect().left-pr.getBoundingClientRect().left-16;}
   tick();
 }
 
@@ -571,7 +589,7 @@ function vToday(){
 
   h+=`<section class="hero"><div class="mode"><span class="dot"></span><span data-live="mode"></span></div>
     <div class="ringbox"><div class="track"></div><div class="ring" data-live="ring"></div><div data-live="markers"></div><div class="knob" data-live="knob"></div>
-      <div class="center"><div class="cap" data-live="cap"></div><div class="big" data-live="big"></div><div class="rem" data-live="rem"></div><div class="pct" data-live="pct"></div></div></div>`;
+      <div class="center"><div class="cap" data-live="cap"></div><div class="big" data-live="big"></div><div class="rem" data-live="rem"></div><div class="pct" data-live="pct"></div></div></div><div class="stline" data-live="stline"></div>`;
   if(S.cur){
     const end=S.cur.start+S.cur.goalH*H;
     h+=`<div class="times">
@@ -707,13 +725,22 @@ function tick(){
     }
   }
   box.style.setProperty('--p',(p*100).toFixed(2)+'%');
+  // stage line: current phase, smooth blend into the next one
+  const sl=$('[data-live="stline"]');
+  if(sl){ if(S.cur){const el=(now()-S.cur.start)/H, i=stageAt(el), a=STAGES[i], b=STAGES[i+1];
+      const t=b?(el-a.h)/(b.h-a.h):1, col=b?mixHex(a.c,b.c,t):a.c;
+      const v=`<div class="r1"><span class="d"></span><b>${a.n}</b><span class="nx">etap ${i+1}/${STAGES.length}</span></div><div class="tr"><i style="width:${(t*100).toFixed(1)}%"></i></div>${b?`<div class="r1 muted"><span>Dalej: <b style="color:var(--fg)">${b.n}</b></span><span class="nx">za ${hm((b.h-el)*H)}</span></div>`:''}`;
+      if(sl.innerHTML!==v) sl.innerHTML=v;
+      sl.style.setProperty('--sc',col); sl.style.setProperty('--nc',b?b.c:a.c);
+      $('[data-live="knob"]').style.setProperty('--g3',col);
+    } else if(sl.innerHTML) sl.innerHTML=''; }
   const kb=$('[data-live="knob"]'), R=box.getBoundingClientRect().width/2-10;
   const ang=p*2*Math.PI; kb.style.transform=`translate(${(R*Math.sin(ang)).toFixed(1)}px,${(-R*Math.cos(ang)).toFixed(1)}px)`;
   kb.style.opacity=(S.cur||(windowInfo()&&windowInfo().open))?1:0;
   // stage markers on the fasting ring
   const mk=$('[data-live="markers"]');
   if(S.cur){const el=(now()-S.cur.start)/H; let m='';
-    STAGES.forEach(s=>{if(s.h===0||s.h>scaleH) return; const a=s.h/scaleH*2*Math.PI;
+    STAGES.forEach(s=>{if(!s.m||s.h>scaleH) return; const a=s.h/scaleH*2*Math.PI;
       m+=`<div class="marker ${el>=s.h?'on':''}" style="--st:${s.c};transform:translate(${(R*Math.sin(a)).toFixed(1)}px,${(-R*Math.cos(a)).toFixed(1)}px)" title="${s.n}">${ic(s.ic)}</div>`});
     if(mk.dataset.sig!==Math.floor(el)+'|'+R.toFixed(0)){mk.innerHTML=m; mk.dataset.sig=Math.floor(el)+'|'+R.toFixed(0)}
   } else mk.innerHTML='';
