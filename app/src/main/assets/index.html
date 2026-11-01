@@ -203,6 +203,12 @@ body.idle .ringbox{--g1:var(--dim);--g2:var(--dim);--g3:var(--dim)}
 .ach .a.on{color:var(--fg)}
 .ach .a.on .m{background:linear-gradient(150deg,var(--f1),var(--f2) 60%,var(--f3));color:#fff;border:0;box-shadow:0 6px 18px -8px var(--f2)}
 .ach .a .m svg.i{width:22px;height:22px}
+.ach button.a{background:none;border:0;padding:0;font:inherit}
+.ach .bp{display:block;width:40px;height:4px;border-radius:2px;background:var(--surface2);overflow:hidden}
+.ach .bp u{display:block;height:100%;background:var(--acc);text-decoration:none}
+.tip{display:flex;gap:12px;align-items:flex-start}
+.tip .ti{width:40px;height:40px;border-radius:13px;flex:none;display:grid;place-items:center;color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.tip p{margin:2px 0 0;font-size:14px;line-height:1.45}
 
 /* plans */
 .plans{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -335,6 +341,43 @@ const PLANS=[
   {id:'36h',f:36,e:12,t:'Monk fast',d:'Cały dzień bez jedzenia, co drugi dzień. Dla doświadczonych.',lv:5},
   {id:'custom',f:16,e:8,t:'Własny',d:'Ustaw dowolną liczbę godzin postu.',lv:0},
 ];
+/* tips: f = during a fast, e = eating window, a = any time */
+const TIPS=[
+ ['f','Głód przychodzi falami i mija po 15–20 minutach. Wypij szklankę wody i zajmij się czymś na kwadrans.'],
+ ['f','Czarna kawa, herbata i woda nie przerywają postu. Mleko, cukier i słodziki z kaloriami już tak.'],
+ ['f','Szczypta soli w wodzie pomaga na ból głowy przy dłuższym poście — to często brak sodu, a nie głód.'],
+ ['f','Najtrudniejsze są zwykle pierwsze 3–4 dni nowego planu. Potem organizm przyzwyczaja się do rytmu.'],
+ ['f','Jeśli czujesz zawroty głowy, słabość albo kołatanie serca — zakończ post. Każdy post się liczy.'],
+ ['f','Spacer po 10–15 minut potrafi uciszyć głód lepiej niż przekąska.'],
+ ['f','Herbata miętowa albo zielona dobrze tłumi apetyt wieczorem.'],
+ ['f','Trening pod koniec postu to dobry moment — a zaraz po nim pierwszy posiłek z białkiem.'],
+ ['f','Przesuń start postu tak, żeby większość przespać. 16 h to tylko 8 h na jawie.'],
+ ['f','Zajęte ręce = cichszy żołądek. Najwięcej podjadania jest z nudów, nie z głodu.'],
+ ['e','Pierwszy posiłek po poście: białko + warzywa. Słodkie na start daje szybki skok i spadek energii.'],
+ ['e','Nie musisz „nadrabiać” kalorii. Jedz do sytości, nie do pełna.'],
+ ['e','Celuj w 1,6–2 g białka na kg masy ciała dziennie, jeśli trenujesz siłowo.'],
+ ['e','Ostatni posiłek bogaty w białko i błonnik ułatwia start kolejnego postu.'],
+ ['e','Alkohol w oknie jedzenia mocno utrudnia następny post — i sen.'],
+ ['e','Jedz powoli. Sygnał sytości dociera do mózgu po ok. 20 minutach.'],
+ ['e','Warzywa na początku posiłku = mniej zjesz reszty bez liczenia kalorii.'],
+ ['e','Okno jedzenia to nie bufet all-inclusive. Liczy się też, CO jesz.'],
+ ['a','Waż się rano, po toalecie, przed piciem — wtedy pomiary są porównywalne.'],
+ ['a','Waga skacze z dnia na dzień o 1–2 kg przez wodę i sól. Patrz na średnią z 7 dni, nie na pojedynczy wynik.'],
+ ['a','Sen poniżej 6 h podnosi apetyt następnego dnia. Dobry post zaczyna się od dobrej nocy.'],
+ ['a','Elastyczność wygrywa: wesele, urodziny, wyjazd — odpuść jeden dzień i wróć do planu jutro.'],
+ ['a','Zacznij od 13:11 lub 14:10 i co tydzień dokładaj godzinę. Skoki od razu na 20:4 rzadko się udają.'],
+ ['a','Przy cukrzycy, lekach, w ciąży albo przy problemach z jedzeniem post omów najpierw z lekarzem.'],
+ ['a','Seria to nagroda, nie kara. Jedna przerwa nie kasuje Twoich postępów.'],
+ ['a','2–3 litry wody dziennie to dobry punkt wyjścia. Część dostarczysz z herbatą i jedzeniem.'],
+ ['a','Kawa po 14:00 potrafi zepsuć sen — a słaby sen psuje kolejny post.'],
+ ['a','Zapisuj samopoczucie po poście. Po kilku tygodniach zobaczysz, który plan służy Ci najlepiej.'],
+];
+function tipNow(){
+  const mode=S.cur?'f':(windowInfo()&&windowInfo().open?'e':'a');
+  const L=TIPS.filter(t=>t[0]===mode||t[0]==='a');
+  const day=Math.floor(sod(now())/DAY);
+  return L[(day+(ui.tipOff||0))%L.length][1];
+}
 const MOODS=[['😣','Ciężko'],['😕','Słabo'],['😐','OK'],['🙂','Dobrze'],['🤩','Świetnie']];
 
 /* ================= state ================= */
@@ -513,6 +556,8 @@ function vToday(){
   });
   h+=`</div><div class="note">Etapy są orientacyjne — tempo zależy od organizmu, aktywności i ostatniego posiłku.</div></div>`;
 
+  // tip of the day
+  h+=`<div class="card"><div class="tip"><div class="ti">${ic('spark')}</div><div class="grow"><div class="label">Porada</div><p>${esc(tipNow())}</p></div><button type="button" class="round" data-act="tipNext" aria-label="Następna porada">${ic('chev')}</button></div></div>`;
   // week
   h+=vWeek();
 
@@ -703,20 +748,69 @@ function vProg(){
   h+=peerWeightHint()+`</div>`;
 
   // achievements
-  const A_=achievements();
-  h+=`<div class="card"><div class="chead"><h3>Odznaki</h3><span class="muted" style="font-size:13px">${A_.filter(a=>a.on).length}/${A_.length}</span></div><div class="ach">`+
-    A_.map(a=>`<div class="a ${a.on?'on':''}"><div class="m">${ic(a.ic)}</div>${a.n}</div>`).join('')+`</div></div>`;
+  const A_=achievements(), cats=[...new Set(A_.map(a=>a.cat))];
+  h+=`<div class="card"><div class="chead"><h3>Wyzwania</h3><span class="muted" style="font-size:13px">${A_.filter(a=>a.on).length}/${A_.length}</span></div>`;
+  for(const c of cats){const L=A_.filter(a=>a.cat===c);
+    h+=`<div class="label" style="margin:14px 0 10px">${c} · ${L.filter(a=>a.on).length}/${L.length}</div><div class="ach">`+
+      L.map((a,k)=>{const hide=a.secret&&!a.on;return `<button type="button" class="a ${a.on?'on':''}" data-act="badge" data-v="${A_.indexOf(a)}"><div class="m">${hide?'<b style="font-size:20px">?</b>':ic(a.ic)}</div>${hide?'Sekretne':a.n}${a.max>1&&!a.on?`<i class="bp"><u style="width:${Math.round(a.cur/a.max*100)}%"></u></i>`:''}</button>`}).join('')+`</div>`}
+  h+=`</div>`;
   return h;
 }
 function achievements(){
-  const fs=S.fasts, n=fs.length, st=streak(), longest=fs.reduce((a,f)=>Math.max(a,(f.end-f.start)/H),0), tot=fs.reduce((a,f)=>a+(f.end-f.start),0)/H;
-  const gymF=fs.filter(f=>gymInFast(f).length).length;
-  return [
-    {n:'Pierwszy post',ic:'star',on:n>=1},{n:'10 postów',ic:'check',on:n>=10},{n:'50 postów',ic:'trophy',on:n>=50},{n:'100 postów',ic:'trophy',on:n>=100},
-    {n:'Seria 3 dni',ic:'flame',on:st.best>=3},{n:'Seria 7 dni',ic:'flame',on:st.best>=7},{n:'Seria 30 dni',ic:'flame',on:st.best>=30},{n:'18 h postu',ic:'bolt',on:longest>=18},
-    {n:'24 h postu',ic:'recycle',on:longest>=24},{n:'36 h postu',ic:'up',on:longest>=36},{n:'100 h łącznie',ic:'clock',on:tot>=100},{n:'1000 h łącznie',ic:'spark',on:tot>=1000},
-    {n:'Trening na czczo',ic:'dumb',on:gymF>=1},{n:'10 na czczo',ic:'dumb',on:gymF>=10},{n:'Waga − 5 kg',ic:'scale',on:(()=>{const w=weightsSorted();return w.length>1&&w[0].kg-lastWeight().kg>=5})()},{n:'Woda 7 dni',ic:'drop',on:waterStreak()>=7},
-  ];
+  const fs=fastsSorted(), n=fs.length, st=streak(), dur=f=>(f.end-f.start)/H;
+  const longest=fs.reduce((a,f)=>Math.max(a,dur(f)),0), tot=fs.reduce((a,f)=>a+dur(f),0);
+  const gym=fs.filter(f=>gymInFast(f).length).length, beast=fs.filter(f=>gymInFast(f).some(g=>g.date-f.start>=20*H)).length;
+  const ws=weightsSorted(), lw=lastWeight(), lost=ws.length>1?ws[0].kg-lw.kg:0;
+  const wdays=Object.values(S.water), wmax=Math.max(0,...wdays);
+  const moods=k=>fs.filter(f=>f.mood===k).length;
+  const any=fn=>fs.some(fn)?1:0, d=t=>new Date(t);
+  const fatThu=y=>{const a=y%19,b=Math.floor(y/100),c=y%100,dd=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-dd-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=(h+l-7*m+114)%31+1;return dkey(new Date(y,mo-1,da).getTime()-52*DAY)};
+  const mm=f=>Math.round((f.end-f.start)/MIN), hhmm=f=>{const x=mm(f);return [Math.floor(x/60),x%60]};
+  const B=[];
+  const add=(cat,ic,n_,d_,cur,max,secret)=>B.push({cat,ic,n:n_,d:d_,cur:Math.min(cur,max),max,on:cur>=max,secret:!!secret});
+  // Posty
+  [[1,'star','Pierwszy post'],[10,'check','10 postów'],[25,'check','25 postów'],[50,'trophy','50 postów'],[100,'trophy','100 postów'],[250,'trophy','250 postów'],[500,'spark','500 postów']]
+    .forEach(([m,i_,t])=>add('Posty',i_,t,'Zakończ '+m+' '+plural(m,'post','posty','postów'),n,m));
+  [[3,'Seria 3 dni'],[7,'Seria tygodnia'],[14,'Dwa tygodnie'],[30,'Miesiąc w serii'],[100,'Seria 100 dni'],[365,'Rok bez przerwy']]
+    .forEach(([m,t])=>add('Posty','flame',t,m+' dni z rzędu z osiągniętym celem',st.best,m));
+  // Długość
+  [[18,'bolt','18 godzin'],[20,'bolt','20 godzin'],[24,'recycle','Pełna doba'],[36,'up','Monk fast'],[48,'up','Dwie doby'],[72,'spark','Trzy doby']]
+    .forEach(([m,i_,t])=>add('Długość',i_,t,'Post trwający min. '+m+' h',Math.floor(longest),m));
+  [[100,'100 h łącznie'],[500,'500 h łącznie'],[1000,'1000 h łącznie'],[10000,'10 000 h — ponad rok życia']]
+    .forEach(([m,t])=>add('Długość','clock',t,'Suma godzin wszystkich postów',Math.floor(tot),m));
+  // Ciało
+  [[1,'Pierwszy kilogram'],[5,'Minus 5 kg'],[10,'Minus 10 kg'],[20,'Minus 20 kg']].forEach(([m,t])=>add('Ciało','scale',t,'Spadek wagi od pierwszego pomiaru',Math.max(0,Math.floor(lost*10)/10),m));
+  add('Ciało','check','Cel osiągnięty','Waga docelowa z ustawień osiągnięta',S.goalKg&&lw&&lw.kg<=S.goalKg?1:0,1);
+  add('Ciało','drop','Wodnik','Cel wody 7 dni z rzędu',waterStreak(),7);
+  add('Ciało','drop','Wielbłąd na odwrót','Cel wody 30 dni z rzędu',waterStreak(),30);
+  add('Ciało','drop','Hydrant','4 litry wody jednego dnia',Math.floor(wmax/100)/10,4);
+  // Trening (Dziennik FBW)
+  add('Trening','dumb','Na czczo','Trening w trakcie postu (Dziennik FBW)',gym,1);
+  add('Trening','dumb','Głodny wilk','10 treningów na czczo',gym,10);
+  add('Trening','dumb','Spartanin','50 treningów na czczo',gym,50);
+  add('Trening','bolt','Bestia na czczo','Trening po min. 20 h postu',beast,1);
+  // Głowa
+  add('Głowa','star','Euforia','10 postów zakończonych z 🤩',moods(4),10);
+  add('Głowa','check','Zen','10 postów zakończonych z 😐 — pełen spokój',moods(2),10);
+  add('Głowa','moon','Przetrwałem','Zakończ post z 😣 i wróć na kolejny',any(f=>f.mood===0&&fs.some(g=>g.start>f.end)),1);
+  // Odjechane
+  add('Odjechane','moon','Sowa','Post rozpoczęty między 2:00 a 5:00',any(f=>{const h=d(f.start).getHours();return h>=2&&h<5}),1,1);
+  add('Odjechane','spark','Skowronek','Post zakończony między 4:00 a 6:00',any(f=>{const h=d(f.end).getHours();return h>=4&&h<6}),1,1);
+  add('Odjechane','clock','Północ','Post rozpoczęty dokładnie o 00:00',any(f=>{const x=d(f.start);return x.getHours()===0&&x.getMinutes()===0}),1,1);
+  add('Odjechane','clock','Szwajcarski zegarek','Post zakończony co do minuty w celu',any(f=>mm(f)===f.goalH*60),1,1);
+  add('Odjechane','spark','11:11','Post zakończony o 11:11. Pomyśl życzenie.',any(f=>{const x=d(f.end);return x.getHours()===11&&x.getMinutes()===11}),1,1);
+  add('Odjechane','spark','Lustro','Post zakończony 11.11 o 11:11',any(f=>{const x=d(f.end);return x.getMonth()===10&&x.getDate()===11&&x.getHours()===11&&x.getMinutes()===11}),1,1);
+  add('Odjechane','wave','Palindrom','Czas postu czytany wspak tak samo, np. 12:21 albo 22:22',any(f=>{const [h,m]=hhmm(f);const t=pad(h)+pad(m);return h<100&&t===t.split('').reverse().join('')}),1,1);
+  add('Odjechane','bolt','Odpowiedź na wszystko','Post trwający 42:00 (±2 min)',any(f=>Math.abs(mm(f)-2520)<=2),1,1);
+  add('Odjechane','recycle','Post π','Post trwający 31:24 — π × 10 h',any(f=>mm(f)===1884),1,1);
+  add('Odjechane','moon','Piątek 13-go','Post zakończony z celem w pechowy piątek',any(f=>reached(f)&&d(f.end).getDay()===5&&d(f.end).getDate()===13),1,1);
+  add('Odjechane','star','Do pierwszej gwiazdki','Post z celem zakończony 24 grudnia po 16:00',any(f=>reached(f)&&d(f.end).getMonth()===11&&d(f.end).getDate()===24&&d(f.end).getHours()>=16),1,1);
+  add('Odjechane','spark','Sylwester','Post trwający przez północ 31 grudnia',any(f=>{const y=d(f.start).getFullYear(),t=new Date(y+1,0,1).getTime();return f.start<t&&f.end>t}),1,1);
+  add('Odjechane','flame','Pączek? Nie, dziękuję','Post z celem w Tłusty Czwartek',any(f=>reached(f)&&dkey(f.end)===fatThu(d(f.end).getFullYear())),1,1);
+  add('Odjechane','scale','Same ósemki','Waga 88,8 kg (albo 77,7 / 99,9 / 111,1)',S.weights.some(w=>[77.7,88.8,99.9,111.1,66.6].includes(Math.round(w.kg*10)/10))?1:0,1,1);
+  add('Odjechane','scale','Co do grama','Ta sama waga 5 pomiarów z rzędu',(()=>{let r=1,b=1;for(let i=1;i<ws.length;i++){r=ws[i].kg===ws[i-1].kg?r+1:1;b=Math.max(b,r)}return ws.length?b:0})(),5,1);
+  add('Odjechane','clock','Rytm dobowy','10 postów z rzędu startujących o tej samej godzinie (±15 min)',(()=>{let b=0;for(let i=0;i+9<fs.length;i++){const m0=d(fs[i].start).getHours()*60+d(fs[i].start).getMinutes();if(fs.slice(i,i+10).every(f=>{const m=d(f.start).getHours()*60+d(f.start).getMinutes();return Math.min(Math.abs(m-m0),1440-Math.abs(m-m0))<=15}))b=10}return b})(),10,1);
+  return B;
 }
 function waterStreak(){let n=0,t=sod(now()); if((S.water[dkey(t)]||0)<S.waterGoal) t-=DAY; while((S.water[dkey(t)]||0)>=S.waterGoal){n++;t-=DAY} return n}
 
@@ -858,6 +952,11 @@ function sheetHtml(k,d){
       <h2>Witaj w Post Przerywany</h2><p class="muted" style="margin:0">Wybierz plan na start. Najczęściej zaczyna się od 14:10 albo 16:8.</p></div>
       <div style="margin-top:16px">${plansGrid()}</div>
       <div class="btns"><button type="button" class="btn grad block" data-act="onboardDo">Zaczynamy</button></div>`;
+  if(k==='badge'){const a=achievements()[d.i]; if(!a) return '';
+    return `<div style="text-align:center"><div class="ach" style="grid-template-columns:1fr"><div class="a ${a.on?'on':''}"><div class="m" style="width:76px;height:76px">${a.secret&&!a.on?'<b style="font-size:30px">?</b>':ic(a.ic)}</div></div></div>
+      <h2 style="margin-top:12px">${a.secret&&!a.on?'Sekretne wyzwanie':esc(a.n)}</h2><p class="muted" style="margin:4px 0 0">${esc(a.d)}</p>
+      ${a.on?'<p class="confetti" style="margin-top:12px">✓ Zdobyte</p>':a.max>1?`<div style="height:8px;border-radius:4px;background:var(--surface2);margin:16px 0 6px;overflow:hidden"><i style="display:block;height:100%;width:${a.cur/a.max*100}%;background:linear-gradient(90deg,var(--f1),var(--f2))"></i></div><div class="muted" style="font-size:13px">${fmt1(a.cur)} / ${fmt1(a.max)}</div>`:''}</div>
+      <div class="btns"><button type="button" class="btn pri" data-act="close">OK</button></div>`;}
   if(k==='paste') return `<h2>Wklej kopię</h2><div class="field"><textarea class="f" id="pasteTxt" placeholder="Wklej tu skopiowane dane"></textarea></div>
       <div class="btns"><button type="button" class="btn" data-act="close">Anuluj</button><button type="button" class="btn pri" data-act="pasteDo">Wczytaj</button></div>`;
   return '';
@@ -931,6 +1030,8 @@ document.addEventListener('click',e=>{
     case 'copy': {const d=backupJson(); if(A&&A.copy)A.copy(d); else navigator.clipboard&&navigator.clipboard.writeText(d); toast('Skopiowano dane'); break}
     case 'paste': openSheet('paste'); break;
     case 'pasteDo': try{importData(JSON.parse($('#pasteTxt').value))}catch(err){toast('To nie wygląda na kopię z tej aplikacji')} break;
+    case 'badge': openSheet('badge',{i:+v}); break;
+    case 'tipNext': ui.tipOff=(ui.tipOff||0)+1; render(); break;
     case 'onboardDo': S.onboarded=true; save(); closeSheet(); render(); if(A&&A.notifyState&&A.notifyState()==='ask') A.askNotify(); break;
   }
 });
