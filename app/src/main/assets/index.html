@@ -378,6 +378,49 @@ function tipNow(){
   const day=Math.floor(sod(now())/DAY);
   return L[(day+(ui.tipOff||0))%L.length][1];
 }
+/* What breaks a fast — based on calories and insulin response; strict (autophagy/gut-rest) fasting is noted separately */
+const FOOD=[
+ {k:'ok',t:'Nie przerywa',c:'var(--ok)',sub:'Zero albo prawie zero kalorii, bez wpływu na insulinę.',items:[
+  ['💧','Woda','Zwykła, mineralna, gazowana. Podstawa każdego postu.'],
+  ['☕','Czarna kawa','Bez cukru, mleka i syropów. Pomaga też na głód.'],
+  ['🍵','Herbata','Czarna, zielona, owocowa i ziołowa — bez cukru i miodu. Mięta i imbir dobrze tłumią apetyt.'],
+  ['🧂','Elektrolity bez cukru','Szczypta soli w wodzie albo saszetki bez cukru. Pomagają na ból głowy przy dłuższych postach.'],
+  ['🍋','Plaster cytryny','W wodzie — ilość kalorii jest pomijalna.'],
+  ['🍎','Ocet jabłkowy','1–2 łyżeczki rozcieńczone w szklance wody. Nierozcieńczony niszczy szkliwo.'],
+  ['💪','Kreatyna','Bez kalorii i bez wpływu na insulinę — możesz brać o stałej porze.'],
+  ['💊','Witaminy w tabletkach','Bez cukru i wypełniaczy. Witaminy A, D, E, K lepiej wchłoniesz z posiłkiem.'],
+  ['🐟','Kapsułki omega-3','W zwykłej dawce to kilka kalorii — praktycznie bez znaczenia.'],
+  ['🦠','Probiotyki','Zwykle bez kalorii.'],
+  ['🪥','Pasta do zębów, płyn do płukania','Nie połykasz, więc nie ma problemu.'],
+  ['🩺','Leki','Bierz tak, jak zalecił lekarz. Część leków trzeba przyjmować z jedzeniem — wtedy dopasuj okno jedzenia.']]},
+ {k:'grey',t:'Szara strefa',c:'var(--warn)',sub:'Przy poście na odchudzanie zwykle OK. Przy „czystym” poście (autofagia, odpoczynek jelit) — odpuść.',items:[
+  ['🥤','Napoje zero i light','Cola Zero, Pepsi Max itp. Zero kalorii, a słodziki (aspartam, sukraloza, acesulfam) w badaniach zwykle nie podnoszą istotnie cukru ani insuliny. Minus: słodki smak u części osób nakręca głód. Sprawdzaj skład — „light” z sokiem ma już cukier.'],
+  ['🌿','Słodziki: stewia, erytrytol','Bez kalorii i praktycznie bez wpływu na cukier. Sukraloza i aspartam — j.w., zależy od osoby.'],
+  ['🫧','Guma bez cukru','1–2 sztuki to kilka kalorii. Żucie u niektórych pobudza apetyt.'],
+  ['🥛','Odrobina mleka do kawy','Łyżka mleka to ok. 10 kcal. Formalnie przerywa post, praktycznie dla odchudzania niewiele zmienia. Większa ilość = przerwany post.'],
+  ['🧈','Kawa z masłem lub MCT','Kalorie są, ale tłuszcz prawie nie rusza insuliny. Ok. 1 łyżki może pomóc przetrwać rano — spowalnia jednak chudnięcie.'],
+  ['🍲','Bulion na kościach','Ma kalorie i białko, więc przerywa post. Przydaje się przy postach ponad 24 h, gdy brakuje elektrolitów.'],
+  ['🧪','Kolagen','Białko — lekko przerywa post i autofagię, na spalanie tłuszczu wpływa niewiele.']]},
+ {k:'no',t:'Przerywa post',c:'#ff6b6b',sub:'Kalorie, cukier albo białko, które wyraźnie podnoszą insulinę.',items:[
+  ['🧃','Soki, także 100%','Dużo cukru — nawet ten „naturalny” przerywa post.'],
+  ['🥤','Zwykłe napoje słodzone','Cola, oranżady, mrożone herbaty, izotoniki z cukrem.'],
+  ['⚡','Energetyki z cukrem','Wersje zero → patrz szara strefa.'],
+  ['☕','Latte, cappuccino, syropy','Porcja mleka i cukru to już posiłek.'],
+  ['🥥','Napoje roślinne','Owsiane, ryżowe, kokosowe — mają węglowodany.'],
+  ['🏋️','BCAA, EAA, odżywka białkowa','Aminokwasy podnoszą insulinę i hamują autofagię. Weź po poście.'],
+  ['🍬','Witaminy w żelkach','Zwykle są z cukrem.'],
+  ['🍯','Miód, cukier, syropy','Nawet łyżeczka do herbaty.'],
+  ['🍺','Alkohol','Ma kalorie i dodatkowo utrudnia kolejny post i sen.']]},
+ {k:'eat',t:'Na wyjście z postu',c:'var(--e1)',sub:'Pierwszy posiłek decyduje o tym, jak się poczujesz przez resztę dnia.',items:[
+  ['🥚','Jajka','Białko i tłuszcz — sycą bez skoku cukru.'],
+  ['🐟','Ryba, kurczak, chude mięso','Dużo białka — zwłaszcza po treningu na czczo.'],
+  ['🥣','Jogurt grecki, skyr, twaróg','Delikatne dla żołądka, dużo białka.'],
+  ['🥗','Warzywa','Na początek posiłku — błonnik spowalnia wchłanianie cukru.'],
+  ['🥑','Awokado, orzechy','Zdrowe tłuszcze, ale w małej porcji — są bardzo kaloryczne.'],
+  ['🍠','Węglowodany złożone','Kasza, ryż, ziemniaki, pełne ziarno — po białku i warzywach, nie zamiast nich.'],
+  ['🍲','Po poście ponad 24 h','Zacznij od małej porcji: bulion, jajko, jogurt. Po 30–60 min normalny posiłek.'],
+  ['🚫','Czego unikać na start','Słodycze, białe pieczywo, fast food, duża pizza — szybki skok i spadek energii, a potem głód.']]},
+];
 const MOODS=[['😣','Ciężko'],['😕','Słabo'],['😐','OK'],['🙂','Dobrze'],['🤩','Świetnie']];
 
 /* ================= state ================= */
@@ -556,6 +599,9 @@ function vToday(){
   });
   h+=`</div><div class="note">Etapy są orientacyjne — tempo zależy od organizmu, aktywności i ostatniego posiłku.</div></div>`;
 
+  // what can I drink / eat
+  h+=`<button type="button" class="card row" style="width:100%;text-align:left" data-act="food" data-v="${S.cur?'ok':'eat'}"><div class="ti" style="width:40px;height:40px;border-radius:13px;display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--water) 15%,transparent);color:var(--water)">${ic('glass')}</div>
+    <div class="grow"><div style="font-weight:600">${S.cur?'Co mogę pić w trakcie postu?':'Czym najlepiej przerwać post?'}</div><div class="muted" style="font-size:13px">${S.cur?'Kawa, napoje zero, guma, suplementy — co przerywa post':'Pierwszy posiłek, co przerywa post, szara strefa'}</div></div>${ic('chev')}</button>`;
   // tip of the day
   h+=`<div class="card"><div class="tip"><div class="ti">${ic('spark')}</div><div class="grow"><div class="label">Porada</div><p>${esc(tipNow())}</p></div><button type="button" class="round" data-act="tipNext" aria-label="Następna porada">${ic('chev')}</button></div></div>`;
   // week
@@ -957,6 +1003,12 @@ function sheetHtml(k,d){
       <h2 style="margin-top:12px">${a.secret&&!a.on?'Sekretne wyzwanie':esc(a.n)}</h2><p class="muted" style="margin:4px 0 0">${esc(a.d)}</p>
       ${a.on?'<p class="confetti" style="margin-top:12px">✓ Zdobyte</p>':a.max>1?`<div style="height:8px;border-radius:4px;background:var(--surface2);margin:16px 0 6px;overflow:hidden"><i style="display:block;height:100%;width:${a.cur/a.max*100}%;background:linear-gradient(90deg,var(--f1),var(--f2))"></i></div><div class="muted" style="font-size:13px">${fmt1(a.cur)} / ${fmt1(a.max)}</div>`:''}</div>
       <div class="btns"><button type="button" class="btn pri" data-act="close">OK</button></div>`;}
+  if(k==='food'){const sec=FOOD.find(f=>f.k===(ui.foodK||'ok'));
+    return `<h2>Co można w trakcie postu?</h2><p class="muted" style="margin:0 0 12px;font-size:13px">Ogólne zasady oparte na kaloriach i reakcji insuliny. Organizmy reagują różnie — obserwuj, jak działa to u Ciebie.</p>
+      <div class="seg" style="margin-bottom:12px">${FOOD.map(f=>`<button type="button" data-act="foodK" data-v="${f.k}" aria-pressed="${f===sec}" style="font-size:12px;padding:8px 4px">${f.k==='ok'?'✅ Można':f.k==='grey'?'🟡 Zależy':f.k==='no'?'❌ Przerywa':'🍽️ Po poście'}</button>`).join('')}</div>
+      <div style="border-left:3px solid ${sec.c};padding:2px 0 2px 12px;margin-bottom:6px"><b>${sec.t}</b><div class="muted" style="font-size:13px">${sec.sub}</div></div>
+      <div class="list">${sec.items.map(it=>`<div class="item" style="align-items:flex-start"><span style="font-size:26px;line-height:1.1;width:34px;text-align:center;flex:none">${it[0]}</span><div class="grow"><div class="t">${esc(it[1])}</div><div class="s" style="line-height:1.4">${esc(it[2])}</div></div></div>`).join('')}</div>
+      <div class="btns"><button type="button" class="btn pri" data-act="close">Zamknij</button></div>`;}
   if(k==='paste') return `<h2>Wklej kopię</h2><div class="field"><textarea class="f" id="pasteTxt" placeholder="Wklej tu skopiowane dane"></textarea></div>
       <div class="btns"><button type="button" class="btn" data-act="close">Anuluj</button><button type="button" class="btn pri" data-act="pasteDo">Wczytaj</button></div>`;
   return '';
@@ -1030,6 +1082,8 @@ document.addEventListener('click',e=>{
     case 'copy': {const d=backupJson(); if(A&&A.copy)A.copy(d); else navigator.clipboard&&navigator.clipboard.writeText(d); toast('Skopiowano dane'); break}
     case 'paste': openSheet('paste'); break;
     case 'pasteDo': try{importData(JSON.parse($('#pasteTxt').value))}catch(err){toast('To nie wygląda na kopię z tej aplikacji')} break;
+    case 'food': ui.foodK=v||'ok'; openSheet('food'); break;
+    case 'foodK': ui.foodK=v; refreshSheet(); $('#sheet').scrollTop=0; break;
     case 'badge': openSheet('badge',{i:+v}); break;
     case 'tipNext': ui.tipOff=(ui.tipOff||0)+1; render(); break;
     case 'onboardDo': S.onboarded=true; save(); closeSheet(); render(); if(A&&A.notifyState&&A.notifyState()==='ask') A.askNotify(); break;
