@@ -236,6 +236,10 @@ body.idle .ringbox{--g1:var(--dim);--g2:var(--dim);--g3:var(--dim)}
 .set:first-of-type{border-top:0}
 .set .t{font-weight:600}
 .set .s{font-size:12px;color:var(--muted);margin-top:1px}
+.sched{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;margin-top:12px}
+.sched label{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--muted)}
+.sched label span{width:24px}
+.sched select.f.sm{flex:1;max-width:none;padding:9px 10px;font-size:15px}
 .sw{position:relative;width:48px;height:28px;flex:none;border-radius:999px;background:var(--surface2);border:1px solid var(--line);transition:background .2s}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:transform .2s,background .2s}
 .sw[aria-checked="true"]{background:var(--acc);border-color:var(--acc)}
@@ -444,10 +448,11 @@ const MOODS=[['😣','Ciężko'],['😕','Słabo'],['😐','OK'],['🙂','Dobrze
 let S={
   v:1, plan:'16:8', customH:16, cur:null, fasts:[], weights:[], water:{},
   waterGoal:2000, glass:250, height:null, goalKg:null, theme:'dark',
-  notif:{end:true,before:30,win:true,winBefore:30,ongoing:true},
+  notif:{end:true,before:30,win:true,winBefore:30,ongoing:true,weekly:true},
+  sched:{on:false,days:{0:'14:10',1:'16:8',2:'16:8',3:'16:8',4:'16:8',5:'16:8',6:'14:10'},startAt:'20:00',remind:true},
   onboarded:false, lastBackup:null, dismissedPeerBw:0, steps:{}, stepGoal:10000,
 };
-try{const raw=localStorage.getItem(LS); if(raw){const o=JSON.parse(raw); S=Object.assign(S,o); S.notif=Object.assign({end:true,before:30,win:true,winBefore:30,ongoing:true},o.notif||{});}}catch(e){}
+try{const raw=localStorage.getItem(LS); if(raw){const o=JSON.parse(raw); S=Object.assign(S,o); S.notif=Object.assign({end:true,before:30,win:true,winBefore:30,ongoing:true,weekly:true},o.notif||{});}}catch(e){}
 let ui={tab:'today', calM:null, wRange:90, sheet:null};
 let PEER=null; // Dziennik FBW snapshot
 let STEPS_STATE=null; // ok | perm | install | update | error | null (browser)
@@ -473,8 +478,12 @@ const toLocal=t=>{const d=new Date(t);return d.getFullYear()+'-'+pad(d.getMonth(
 const fromLocal=v=>{const t=new Date(v).getTime();return isNaN(t)?null:t};
 const num=v=>{const n=parseFloat(String(v).replace(',','.'));return isNaN(n)?null:n};
 
-function planObj(){const p=PLANS.find(x=>x.id===S.plan)||PLANS[2]; if(p.id==='custom'){const f=Math.max(10,Math.min(96,+S.customH||16));return Object.assign({},p,{f,e:Math.max(1,24-f>0?24-f:12)})} return p}
-function planLabel(){const p=planObj();return p.id==='custom'?p.f+':'+(24-p.f>0?24-p.f:'—'):p.id}
+/* weekly schedule: a plan per weekday ('off' = no fast that day) */
+function schedId(t){if(!S.sched||!S.sched.on)return null;const v=S.sched.days[new Date(t==null?now():t).getDay()];return v||null}
+const schedOff=t=>schedId(t)==='off';
+function planObj(){const sid=schedId(); if(sid&&sid!=='off'){const q=PLANS.find(x=>x.id===sid); if(q) return q}
+  const p=PLANS.find(x=>x.id===S.plan)||PLANS[2]; if(p.id==='custom'){const f=Math.max(10,Math.min(96,+S.customH||16));return Object.assign({},p,{f,e:Math.max(1,24-f>0?24-f:12)})} return p}
+function planLabel(){if(schedOff())return 'Wolne';const p=planObj();return p.id==='custom'?p.f+':'+(24-p.f>0?24-p.f:'—'):p.id}
 const goalH=()=>S.cur?S.cur.goalH:planObj().f;
 const fastsSorted=()=>S.fasts.slice().sort((a,b)=>a.start-b.start);
 const lastFast=()=>{let l=null;for(const f of S.fasts)if(!l||f.end>l.end)l=f;return l};
@@ -504,9 +513,15 @@ function syncNative(){
       if(S.notif.winBefore>0) al.push({at:w.end-S.notif.winBefore*MIN,title:'Okno jedzenia zamyka się za '+S.notif.winBefore+' min',body:'Czas na ostatni posiłek przed postem '+planLabel()+'.'});
       al.push({at:w.end,title:'Czas na post',body:'Okno jedzenia się zamknęło. Wystartuj post '+p.f+' h.',act:'start'});
     }
+    if(S.sched.on&&S.sched.remind){const [hh,mm]=(S.sched.startAt||'20:00').split(':').map(Number);
+      for(let k=0;k<8;k++){const d=new Date(now()+k*DAY);d.setHours(hh,mm,0,0);const t=d.getTime();
+        if(t<=now()+MIN||schedOff(t))continue;if(w&&w.open&&t<w.end)continue;
+        const q=PLANS.find(x=>x.id===schedId(t))||planObj();
+        al.push({at:t,title:'Pora na post '+q.id,body:'Wg harmonogramu zaczynasz teraz post '+q.f+' h.',act:'start'});break}}
   }
   al.sort((a,b)=>a.at-b.at);
   try{A.schedule(JSON.stringify(al.slice(0,12)))}catch(e){}
+  try{A.weekly&&A.weekly(!!S.notif.weekly)}catch(e){}
   try{
     if(S.cur&&S.notif.ongoing){const end=S.cur.start+S.cur.goalH*H; A.ongoing(true,S.cur.start,end,'Post '+S.cur.goalH+' h trwa','Start '+clock(S.cur.start)+' · cel o '+clock(end)+' ('+dayWord(end)+')');}
     else A.ongoing(false,0,0,'','');
@@ -520,7 +535,9 @@ function publish(){
     cur:S.cur?{start:S.cur.start,goalH:S.cur.goalH}:null,
     lastEnd:l?l.end:null, window:w?{start:w.start,end:w.end}:null,
     weight:lw?{kg:lw.kg,d:lw.d}:null, streak:streak().cur,
-    fasts:fastsSorted().slice(-60).map(f=>({start:f.start,end:f.end,goalH:f.goalH}))};
+    fasts:fastsSorted().slice(-60).map(f=>({start:f.start,end:f.end,goalH:f.goalH})),
+    wts:weightsSorted().slice(-30).map(w=>({d:w.d,kg:w.kg})),
+    steps:Object.fromEntries(Object.entries(S.steps||{}).sort().slice(-14))};
   try{A.publish(JSON.stringify(snap))}catch(e){}
 }
 function loadPeer(){
@@ -771,7 +788,7 @@ function tick(){
       set('mode','Gotowy na post'); set('cap','Od końca okna'); set('big',hms(now()-w.end)); set('rem','okno zamknęło się o <b>'+clock(w.end)+'</b>');
       const pe=$('[data-live="pct"]'); pe.className='pct'; pe.textContent=planLabel();
     } else { p=0;
-      set('mode','Gotowy'); set('cap','Twój plan'); set('big',planLabel()); set('rem',planObj().f+' h postu · '+planObj().e+' h jedzenia');
+      set('mode','Gotowy'); set('cap',schedOff()?'Harmonogram':'Twój plan'); set('big',planLabel()); set('rem',schedOff()?'dziś dzień bez postu':planObj().f+' h postu · '+planObj().e+' h jedzenia');
       const pe=$('[data-live="pct"]'); pe.className='pct'; pe.textContent='Wystartuj pierwszy post';
     }
   }
@@ -872,6 +889,11 @@ function vProg(){
   } else h+=`<div class="empty">${ic('scale')}<div>Dodaj pierwszy pomiar, żeby zobaczyć trend.</div></div>`;
   h+=peerWeightHint()+`</div>`;
 
+  // insights
+  const INS=insights();
+  h+=`<div class="card"><div class="chead"><h3>Wnioski</h3><span class="muted" style="font-size:13px">z Twoich danych</span></div>`+
+    (INS.length?`<div class="list">${INS.map(x=>`<div class="item" style="align-items:flex-start"><div class="ti" style="width:34px;height:34px;border-radius:11px;flex:none;display:grid;place-items:center;color:var(--acc);background:color-mix(in srgb,var(--acc) 14%,transparent)">${ic(x.ic)}</div><div class="grow" style="font-size:14px;line-height:1.45">${x.t}</div></div>`).join('')}</div>`
+      :`<div class="muted" style="font-size:14px">Wnioski pojawią się po ok. 7 postach — im więcej danych (samopoczucie, waga, kroki), tym ciekawsze.</div>`)+`</div>`;
   // achievements
   const A_=achievements(), cats=[...new Set(A_.map(a=>a.cat))];
   h+=`<div class="card"><div class="chead"><h3>Wyzwania</h3><span class="muted" style="font-size:13px">${A_.filter(a=>a.on).length}/${A_.length}</span></div>`;
@@ -949,6 +971,47 @@ function achievements(){
 }
 function waterStreak(){let n=0,t=sod(now()); if((S.water[dkey(t)]||0)<S.waterGoal) t-=DAY; while((S.water[dkey(t)]||0)>=S.waterGoal){n++;t-=DAY} return n}
 
+/* ---------- insights from the user's own data ---------- */
+function insights(){
+  const fs=fastsSorted(), out=[], pct=(a,b)=>b?Math.round(a/b*100):0;
+  if(fs.length<7) return out;
+  const r30=fs.filter(f=>f.end>=now()-30*DAY), p30=fs.filter(f=>f.end<now()-30*DAY&&f.end>=now()-60*DAY);
+  if(r30.length>=5){const a=pct(r30.filter(reached).length,r30.length);
+    let t=`Ostatnie 30 dni: cel w <b>${a}%</b> postów`;
+    if(p30.length>=5){const b=pct(p30.filter(reached).length,p30.length);t+=a>b?` — lepiej niż miesiąc wcześniej (${b}%) 📈`:a<b?` — miesiąc wcześniej było ${b}%`:` — tak samo jak miesiąc wcześniej`}
+    out.push({ic:'trophy',t:t+'.'})}
+  const miss=fs.filter(f=>!reached(f));
+  if(miss.length>=3){const c={};miss.forEach(f=>{const h=new Date(f.end).getHours();c[h]=(c[h]||0)+1});
+    const [h,n]=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
+    if(n>=2) out.push({ic:'clock',t:`Najczęściej kończysz post przed czasem około <b>${pad(h)}:00</b> (${n} z ${miss.length} razy). Zaplanuj na tę godzinę kawę, herbatę albo spacer.`})}
+  const dn=['niedziele','poniedziałki','wtorki','środy','czwartki','piątki','soboty'], wd={};
+  fs.forEach(f=>{const d=new Date(f.end).getDay();wd[d]=wd[d]||[0,0];wd[d][1]++;if(reached(f))wd[d][0]++});
+  const wl=Object.entries(wd).filter(([,v])=>v[1]>=2).map(([d,v])=>({d:+d,r:v[0]/v[1],n:v[1]}));
+  if(wl.length>=4){wl.sort((a,b)=>b.r-a.r);const b=wl[0],w=wl[wl.length-1];
+    if(b.r-w.r>=0.25) out.push({ic:'cal',t:`Najlepiej idą Ci <b>${dn[b.d]}</b> (${pct(b.r,1)}% z celem), najtrudniej <b>${dn[w.d]}</b> (${pct(w.r,1)}%).${S.sched&&S.sched.on?'':' Możesz ustawić na ten dzień lżejszy plan w harmonogramie.'}`})}
+  const bm={};fs.filter(f=>f.mood!=null).forEach(f=>{(bm[f.goalH]=bm[f.goalH]||[]).push(f.mood)});
+  const ml=Object.entries(bm).filter(([,v])=>v.length>=3).map(([g,v])=>({g,a:v.reduce((x,y)=>x+y,0)/v.length,n:v.length}));
+  if(ml.length>=2){ml.sort((a,b)=>b.a-a.a);const b=ml[0],w=ml[ml.length-1];
+    if(b.a-w.a>=0.5) out.push({ic:'star',t:`Najlepiej czujesz się po postach <b>${b.g} h</b> (${MOODS[Math.round(b.a)][0]} średnio), gorzej po ${w.g} h (${MOODS[Math.round(w.a)][0]}).`})}
+  else if(ml.length===1&&fs.filter(f=>f.mood!=null).length>=5){const a=ml[0].a;out.push({ic:'star',t:`Średnie samopoczucie po poście: ${MOODS[Math.round(a)][0]} ${MOODS[Math.round(a)][1].toLowerCase()}.`})}
+  const early=fs.filter(f=>new Date(f.start).getHours()<20&&new Date(f.start).getHours()>=15), late=fs.filter(f=>{const h=new Date(f.start).getHours();return h>=20||h<3});
+  if(early.length>=3&&late.length>=3){const a=early.filter(reached).length/early.length,b=late.filter(reached).length/late.length;
+    if(Math.abs(a-b)>=0.25) out.push({ic:'moon',t:a>b?`Gdy kończysz jeść przed 20:00, cel osiągasz w ${pct(a,1)}% razy — przy późnej kolacji tylko w ${pct(b,1)}%.`:`Późna kolacja Ci nie przeszkadza: po starcie po 20:00 cel w ${pct(b,1)}%, przy wcześniejszym w ${pct(a,1)}%.`})}
+  const gf=fs.filter(f=>gymInFast(f).length);
+  if(gf.length>=3){const r=gf.filter(reached).length/gf.length,o=fs.filter(f=>!gymInFast(f).length),ro=o.length?o.filter(reached).length/o.length:0;
+    out.push({ic:'dumb',t:`Treningi na czczo: <b>${gf.length}</b>. W takie dni cel osiągasz w ${pct(r,1)}% (bez treningu: ${pct(ro,1)}%).`})}
+  const sk=Object.keys(S.steps||{}).filter(k=>fs.some(f=>dkey(f.end)===k));
+  if(sk.length>=7){const hiK=sk.filter(k=>S.steps[k]>=S.stepGoal),loK=sk.filter(k=>S.steps[k]<S.stepGoal);
+    const rate=K=>{const L=fs.filter(f=>K.includes(dkey(f.end)));return L.length?L.filter(reached).length/L.length:0};
+    if(hiK.length>=3&&loK.length>=3&&Math.abs(rate(hiK)-rate(loK))>=0.2) out.push({ic:'up',t:`W dni z celem kroków post kończysz z celem w ${pct(rate(hiK),1)}%, w pozostałe w ${pct(rate(loK),1)}%.`})}
+  const ws=weightsSorted();
+  if(ws.length>=4&&ws[ws.length-1].d-ws[0].d>=21*DAY){const L=ws.filter(w=>w.d>=now()-35*DAY);
+    if(L.length>=4){const n=L.length,mx=L.reduce((a,w)=>a+w.d,0)/n,my=L.reduce((a,w)=>a+w.kg,0)/n,sl=L.reduce((a,w)=>a+(w.d-mx)*(w.kg-my),0)/L.reduce((a,w)=>a+(w.d-mx)**2,0)*7*DAY;
+      const pctW=Math.abs(sl)/my*100;
+      out.push({ic:'scale',t:Math.abs(sl)<0.1?'Waga stoi w miejscu od kilku tygodni. Jeśli chcesz chudnąć — spróbuj dłuższego postu albo więcej kroków.':sl<0?`Tracisz średnio <b>${fmt1(-sl)} kg tygodniowo</b>${pctW>1?' — szybko; pilnuj białka, żeby nie tracić mięśni.':' — zdrowe tempo.'}`:`Waga rośnie o ok. <b>${fmt1(sl)} kg tygodniowo</b>.`})}}
+  return out;
+}
+
 /* ---------- charts ---------- */
 function fastChart(arr){
   const W=340,Hh=160,pl=26,pb=20,pt=10, max=Math.max(...arr.map(f=>(f.end-f.start)/H),...arr.map(f=>f.goalH))*1.1;
@@ -992,6 +1055,18 @@ function vSet(){
   const ns=A&&A.notifyState?A.notifyState():'granted', ex=A&&A.exactOk?A.exactOk():true;
   let h=`<header class="top"><div><h1>Ustawienia</h1><div class="sub">Plan, przypomnienia i dane</div></div></header>`;
   h+=`<div class="card"><div class="chead"><h3>Plan postu</h3></div>${plansGrid()}</div>`;
+  const sc=S.sched, dn=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'], opts=v=>['off'].concat(PLANS.filter(p=>p.id!=='custom').map(p=>p.id)).map(id=>`<option value="${id}" ${v===id?'selected':''}>${id==='off'?'wolne':id}</option>`).join('');
+  h+=`<div class="card"><div class="chead"><h3>Harmonogram</h3>${sw('sched',sc.on)}</div>
+    <div class="muted" style="font-size:13px">${sc.on?'Każdy dzień może mieć inny plan. Plan liczy się wg dnia, w którym zaczynasz post.':'Włącz, żeby np. w tygodniu robić 16:8, a w weekend 14:10 — albo 2 mocniejsze dni w tygodniu.'}</div>`;
+  if(sc.on){
+    h+=`<div class="sched">${[1,2,3,4,5,6,0].map(d=>`<label><span>${dn[d]}</span><select class="f sm" data-k="sd${d}">${opts(sc.days[d])}</select></label>`).join('')}</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><span class="label" style="width:100%">Szybkie ustawienia</span>
+        <button type="button" class="btn" data-act="schedPre" data-v="wk">Tydzień 16:8, weekend 14:10</button>
+        <button type="button" class="btn" data-act="schedPre" data-v="52">Pn i Czw 20:4, reszta 13:11</button>
+        <button type="button" class="btn" data-act="schedPre" data-v="same">Codziennie ${esc(S.plan==='custom'?'16:8':S.plan)}</button></div>
+      <div class="set" style="margin-top:6px"><div><div class="t">Przypomnienie o starcie</div><div class="s">Codziennie o tej godzinie, gdy nie ma postu</div></div><div class="row"><input class="f sm" type="time" data-k="startAt" value="${esc(sc.startAt)}">${sw('schedRemind',sc.remind)}</div></div>`;
+  }
+  h+=`</div>`;
   h+=`<div class="card"><div class="chead"><h3>Powiadomienia</h3></div>`;
   if(A&&ns!=='granted') h+=`<div class="suggest" style="margin:0 0 6px">${ic('bell')}<div class="grow">Powiadomienia są wyłączone.</div><button type="button" class="link" style="color:var(--acc);font-weight:600" data-act="askNotify">Włącz</button></div>`;
   if(A&&!ex) h+=`<div class="suggest" style="margin:0 0 6px">${ic('clock')}<div class="grow">Pozwól na dokładne alarmy, żeby przypomnienia przychodziły co do minuty.</div><button type="button" class="link" style="color:var(--acc);font-weight:600" data-act="exact">Zezwól</button></div>`;
@@ -999,7 +1074,9 @@ function vSet(){
     <div class="set"><div><div class="t">Przed końcem postu</div><div class="s">Uprzedzenie</div></div><select class="f sm" data-k="before">${[0,15,30,60].map(v=>`<option value="${v}" ${S.notif.before==v?'selected':''}>${v?v+' min':'wył.'}</option>`).join('')}</select></div>
     <div class="set"><div><div class="t">Zamknięcie okna jedzenia</div><div class="s">Przypomnienie o starcie postu</div></div>${sw('win',S.notif.win)}</div>
     <div class="set"><div><div class="t">Ostatni posiłek</div><div class="s">Uprzedzenie przed końcem okna</div></div><select class="f sm" data-k="winBefore">${[0,15,30,60].map(v=>`<option value="${v}" ${S.notif.winBefore==v?'selected':''}>${v?v+' min':'wył.'}</option>`).join('')}</select></div>
-    <div class="set"><div><div class="t">Licznik w pasku</div><div class="s">Stałe powiadomienie z odliczaniem w trakcie postu</div></div>${sw('ongoing',S.notif.ongoing)}</div></div>`;
+    <div class="set"><div><div class="t">Licznik w pasku</div><div class="s">Stałe powiadomienie z odliczaniem w trakcie postu</div></div>${sw('ongoing',S.notif.ongoing)}</div>
+    <div class="set"><div><div class="t">Podsumowanie tygodnia</div><div class="s">W niedzielę o 19:00: posty, treningi, kroki, waga</div></div>${sw('weekly',S.notif.weekly)}</div>
+    ${A&&A.weeklyText&&S.notif.weekly?`<details class="field"><summary class="muted" style="font-size:13px">Podgląd podsumowania</summary><div style="white-space:pre-line;font-size:14px;margin-top:8px;line-height:1.5">${esc(A.weeklyText())}</div></details>`:''}</div>`;
 
   h+=`<div class="card"><div class="chead"><h3>Ciało i woda</h3></div>
     <div class="set"><div class="t">Wzrost (cm)</div><input class="f sm" inputmode="numeric" data-k="height" value="${S.height||''}" placeholder="np. 182"></div>
@@ -1083,7 +1160,7 @@ function sheetHtml(k,d){
       <div class="field"><span class="label">Dzień</span><input class="f" type="date" id="wD" value="${dkey(w?w.d:now())}" max="${dkey(now())}"></div>
       <div class="btns">${w?`<button type="button" class="btn danger" data-act="delWeight" data-id="${w.id}">Usuń</button>`:`<button type="button" class="btn" data-act="close">Anuluj</button>`}<button type="button" class="btn pri" data-act="saveWeight" data-id="${w?w.id:''}">Zapisz</button></div>`;
   }
-  if(k==='plan') return `<h2>Wybierz plan</h2><p class="muted" style="margin:0 0 14px">${S.cur?'Bieżący post zachowa swój cel. ':''}Możesz zmienić w każdej chwili.</p>${plansGrid()}<div class="btns"><button type="button" class="btn pri" data-act="close">Gotowe</button></div>`;
+  if(k==='plan') return `<h2>Wybierz plan</h2><p class="muted" style="margin:0 0 14px">${S.cur?'Bieżący post zachowa swój cel. ':''}${S.sched.on?'<b>Harmonogram jest włączony</b> — dziś obowiązuje '+esc(planLabel())+'. Plan poniżej działa, gdy harmonogram wyłączysz (Ustawienia).':'Możesz zmienić w każdej chwili.'}</p>${plansGrid()}<div class="btns"><button type="button" class="btn pri" data-act="close">Gotowe</button></div>`;
   if(k==='onboard') return `<div style="text-align:center;padding:6px 0 4px"><div style="width:72px;height:72px;margin:0 auto 12px;border-radius:22px;background:conic-gradient(from 0deg,var(--f1),var(--f2),var(--f3),var(--surface2) 78%);-webkit-mask:radial-gradient(farthest-side,transparent 58%,#000 60%);mask:radial-gradient(farthest-side,transparent 58%,#000 60%)"></div>
       <h2>Witaj w Post Przerywany</h2><p class="muted" style="margin:0">Wybierz plan na start. Najczęściej zaczyna się od 14:10 albo 16:8.</p></div>
       <div style="margin-top:16px">${plansGrid()}</div>
@@ -1162,7 +1239,8 @@ document.addEventListener('click',e=>{
     case 'calM': {const d=new Date(); ui.calM=(ui.calM||d.getFullYear()*12+d.getMonth())+(+v); render(); break}
     case 'more': ui.histN=(ui.histN||40)+40; render(); break;
     case 'wRange': ui.wRange=+v; render(); break;
-    case 'sw': S.notif[t.dataset.k]=!S.notif[t.dataset.k]; save(); render(); break;
+    case 'sw': {const k=t.dataset.k; if(k==='sched') S.sched.on=!S.sched.on; else if(k==='schedRemind') S.sched.remind=!S.sched.remind; else S.notif[k]=!S.notif[k]; save(); render(); break}
+    case 'schedPre': {const D=S.sched.days; if(v==='wk'){for(let d=0;d<7;d++)D[d]=(d===0||d===6)?'14:10':'16:8'} else if(v==='52'){for(let d=0;d<7;d++)D[d]=(d===1||d===4)?'20:4':'13:11'} else {for(let d=0;d<7;d++)D[d]=S.plan==='custom'?'16:8':S.plan} save(); render(); toast('Harmonogram ustawiony'); break}
     case 'askNotify': A&&A.askNotify(); break;
     case 'exact': A&&A.openExactSettings(); break;
     case 'theme': S.theme=v; save(); applyTheme(); render(); break;
@@ -1189,6 +1267,8 @@ document.addEventListener('change',e=>{
   else if(k==='waterGoal'){const v=num(t.value);S.waterGoal=v&&v>=250&&v<=8000?Math.round(v):2000}
   else if(k==='glass'){S.glass=+t.value}
   else if(k==='stepGoal'){S.stepGoal=+t.value}
+  else if(/^sd\d$/.test(k)){S.sched.days[k[2]]=t.value}
+  else if(k==='startAt'){S.sched.startAt=t.value||'20:00'}
   else if(k==='customH'){const v=num(t.value);S.customH=v&&v>=10&&v<=96?Math.round(v):16}
   else return;
   save(); render();

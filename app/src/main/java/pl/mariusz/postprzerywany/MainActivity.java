@@ -253,6 +253,14 @@ public class MainActivity extends Activity {
             return a == null ? "" : a;
         }
 
+        /** Sunday 19:00 weekly summary on/off. */
+        @JavascriptInterface
+        public void weekly(boolean on) { Weekly.enable(MainActivity.this, on); }
+
+        /** Preview of the weekly summary text (for the settings screen). */
+        @JavascriptInterface
+        public String weeklyText() { return Weekly.text(MainActivity.this); }
+
         /** Steps from Health Connect: "ok" | "install" | "update" */
         @JavascriptInterface
         public String stepsSdk() { return health.sdk(); }
@@ -268,6 +276,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void publish(String json) {
             Alarms.prefs(MainActivity.this).edit().putString("share", json).apply();
+            FastWidget.refresh(MainActivity.this);
         }
 
         /** Dziennik FBW snapshot, "" when the app is missing or too old. */

@@ -145,6 +145,8 @@ final class Alarms {
     /** After reboot / update / goal reached: rebuild what the page last asked for. */
     static void restore(Context c) {
         SharedPreferences p = prefs(c);
+        Weekly.schedule(c);
+        FastWidget.refresh(c);
         scheduleAll(c, p.getString("alarms", "[]"));
         if (p.getBoolean("og", false)) {
             ongoing(c, true, p.getLong("ogS", 0), p.getLong("ogE", 0), p.getString("ogT", "Post trwa"), p.getString("ogX", ""));

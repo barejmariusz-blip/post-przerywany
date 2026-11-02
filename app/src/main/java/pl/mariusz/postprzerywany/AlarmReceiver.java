@@ -7,6 +7,7 @@ import android.content.Intent;
 public class AlarmReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {
+        FastWidget.refresh(c);
         Alarms.notify(c, i.getIntExtra("slot", 0), i.getStringExtra("title"), i.getStringExtra("body"), i.getStringExtra("act"));
         // Goal reached: the ongoing counter switches from countdown to count-up
         if (Alarms.prefs(c).getBoolean("og", false)) {
