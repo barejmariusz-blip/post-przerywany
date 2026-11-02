@@ -25,9 +25,9 @@ import java.util.Locale;
 public class FastWidget extends AppWidgetProvider {
 
     private static final long H = 3600_000L;
-    private static final int[] SH = {0, 4, 8, 12, 16, 18, 24, 36, 48, 72};
-    private static final String[] SN = {"Trawienie", "Spadek cukru", "Zapasy glikogenu", "Spalanie tłuszczu", "Wczesna ketoza",
-            "Ketoza", "Autofagia", "Hormon wzrostu rośnie", "Wysoki hormon wzrostu", "Głęboka odnowa"};
+    private static final int[] SH = {0, 4, 8, 12, 16, 18, 21, 24, 36, 48, 72};
+    private static final String[] SN = {"Trawienie", "Spadek cukru", "Zapasy glikogenu", "Spalanie tłuszczu", "Tłuszcz głównym paliwem",
+            "Wczesna ketoza", "Ketoza", "Autofagia", "Hormon wzrostu rośnie", "Wysoki hormon wzrostu", "Głęboka odnowa"};
 
     @Override
     public void onUpdate(Context c, AppWidgetManager m, int[] ids) {

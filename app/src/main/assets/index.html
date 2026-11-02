@@ -82,6 +82,10 @@ body.idle .ringbox{--g1:var(--dim);--g2:var(--dim);--g3:var(--dim)}
 
 .stline{width:100%;display:flex;flex-direction:column;gap:6px;margin:2px 0 10px;min-height:0}
 .stline:empty{display:none}
+.exrow{display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:12px;line-height:1.4;color:var(--muted);background:color-mix(in srgb,var(--warn) 8%,transparent);border:1px dashed color-mix(in srgb,var(--warn) 40%,transparent);border-radius:10px;padding:7px 10px;margin-top:2px}
+.exrow b{color:var(--fg);font-weight:600}
+.marker.ghost{background:transparent;border:1.5px dashed color-mix(in srgb,var(--warn) 70%,transparent);color:var(--warn);opacity:.75;font-size:12px;box-shadow:none}
+.exnote{margin-top:8px;font-size:12px;color:var(--warn);opacity:.85}
 .stline .r1{display:flex;align-items:center;gap:8px;font-size:13px}
 .stline .r1 .d{width:9px;height:9px;border-radius:50%;flex:none;box-shadow:0 0 10px var(--sc);background:var(--sc)}
 .stline .r1 b{font-weight:600}
@@ -341,10 +345,11 @@ const STAGES=[ // m = main milestone: drawn on the ring and announced by notific
   {h:10,n:'Niska insulina', ic:'wave', c:'#a78bfa', d:'Insulina jest nisko, więc komórki tłuszczowe zaczynają uwalniać tłuszcz do krwi.'},
   {h:12,n:'Start spalania tłuszczu', ic:'flame', c:'#f59e6b', d:'Glikogen się kończy. Organizm coraz mocniej sięga po tłuszcz.', m:1},
   {h:14,n:'Spalanie na pełnych obrotach', ic:'flame', c:'#ff8a5b', d:'Tłuszcz ma coraz większy udział w produkcji energii.'},
-  {h:16,n:'Wczesna ketoza', ic:'bolt', c:'#ff7166', d:'Wątroba zaczyna produkować więcej ciał ketonowych.', m:1},
-  {h:18,n:'Ketoza', ic:'bolt', c:'#ff5e7a', d:'Ciała ketonowe zasilają mózg i mięśnie. Wiele osób czuje wtedy przypływ skupienia.', m:1},
-  {h:20,n:'Głębsza ketoza', ic:'bolt', c:'#f4609b', d:'Poziom ketonów dalej rośnie, cukier we krwi jest stabilnie niski.'},
+  {h:16,n:'Tłuszcz głównym paliwem', ic:'flame', c:'#ff7a62', d:'Większość energii pochodzi już z tłuszczu. Ketony zaczynają powoli rosnąć.', m:1},
+  {h:18,n:'Wczesna ketoza', ic:'bolt', c:'#ff6a6e', d:'Wątroba produkuje coraz więcej ciał ketonowych.', m:1},
+  {h:21,n:'Ketoza', ic:'bolt', c:'#ff5e7a', d:'Ketony (BHB) przekraczają ok. 0,5 mmol/l — w badaniach średnio ok. 21. godziny postu. Zasilają mózg i mięśnie.', m:1},
   {h:24,n:'Autofagia', ic:'recycle', c:'#e879f9', d:'Nasila się „sprzątanie” komórek — recykling zużytych elementów.', m:1},
+  {h:27,n:'Głębsza ketoza', ic:'bolt', c:'#f06bd0', d:'Poziom ketonów dalej rośnie, cukier we krwi jest stabilnie niski.'},
   {h:30,n:'Głód słabnie', ic:'recycle', c:'#d77cfa', d:'Fale głodu są zwykle rzadsze i słabsze niż w pierwszej dobie.'},
   {h:36,n:'Hormon wzrostu rośnie', ic:'up', c:'#c474fb', d:'Poziom hormonu wzrostu rośnie, co pomaga chronić mięśnie.', m:1},
   {h:48,n:'Wysoki hormon wzrostu', ic:'up', c:'#b26bff', d:'Hormon wzrostu jest wyraźnie wyższy niż na starcie postu.', m:1},
@@ -487,6 +492,21 @@ function planLabel(){if(schedOff())return 'Wolne';const p=planObj();return p.id=
 const goalH=()=>S.cur?S.cur.goalH:planObj().f;
 const fastsSorted=()=>S.fasts.slice().sort((a,b)=>a.start-b.start);
 const lastFast=()=>{let l=null;for(const f of S.fasts)if(!l||f.end>l.end)l=f;return l};
+/* Exercise during a fast burns glycogen, so glycogen/fat/ketosis stages come sooner.
+   Calibrated on BYU 2021 (Deru et al.): 45–50 min of hard treadmill at the start of a fast → ketosis ~3.5 h earlier.
+   Background estimate only — the official ring and notifications stay on the standard hours. */
+const EX_MAX_H=3.5, EX_REF_KCAL=500;
+function exBoost(f){
+  if(!f) return null; const end=f.end||now(), list=[];
+  for(const g of gymSessions()){const mid=g.date-(g.dur||45*MIN)/2; if(mid<f.start+60*MIN||mid>end) continue;
+    const hAt=(mid-f.start)/H, kcal=+g.kcal||300, timing=hAt<=12?1:hAt<=18?1-(hAt-12)/12:0.3;
+    list.push({g,hAt,kcal,shift:Math.min(EX_MAX_H,EX_MAX_H*kcal/EX_REF_KCAL)*timing})}
+  if(!list.length) return null;
+  const shift=Math.min(4,list.reduce((a,x)=>a+x.shift,0)), first=Math.min(...list.map(x=>x.hAt));
+  return shift>=0.15?{shift,first,list}:null;
+}
+/* estimated hour of a stage with the boost applied (only glycogen → deeper-ketosis stages move) */
+function exStageH(s,b){if(!b||s.h<8||s.h>27) return s.h; return Math.max(b.first,s.h-b.shift)}
 function mixHex(a,b,t){const p=x=>[1,3,5].map(i=>parseInt(x.slice(i,i+2),16));const A=p(a),B=p(b);return '#'+A.map((v,i)=>Math.round(v+(B[i]-v)*Math.max(0,Math.min(1,t))).toString(16).padStart(2,'0')).join('')}
 function stageAt(h){let i=0;STAGES.forEach((s,k)=>{if(h>=s.h)i=k});return i}
 
@@ -674,13 +694,14 @@ function vToday(){
   // stages
   const el=S.cur?(now()-S.cur.start)/H:0, si=S.cur?stageAt(el):-1;
   h+=`<div class="card"><div class="chead"><h3>Etapy postu</h3><span class="muted" style="font-size:13px">${S.cur?'teraz: '+STAGES[si].n:'po starcie postu'}</span></div><div class="stages" id="stages">`;
+  const bxC=S.cur?exBoost(S.cur):null;
   STAGES.forEach((s,i)=>{
     const nx=STAGES[i+1], cls=!S.cur?'':i<si?'past':i===si?'now':'';
     const prog=S.cur&&i===si&&nx?Math.min(100,(el-s.h)/(nx.h-s.h)*100):(i<si?100:0);
     const until=S.cur&&i>si?'za '+hm((s.h-el)*H):'';
     h+=`<div class="stage ${cls}" style="--st:${s.c}"><div class="row"><div class="ic">${ic(s.ic)}</div><div class="h">${s.h}${nx?'–'+nx.h:'+'} h</div></div>
       ${i===si?'<span class="tag">Teraz</span>':until?`<span class="tag" style="color:var(--muted)">${until}</span>`:''}
-      <div class="n">${s.n}</div><p>${s.d}</p>${S.cur&&i===si&&nx?`<div class="bar"><i style="width:${prog}%"></i></div>`:''}</div>`;
+      <div class="n">${s.n}</div><p>${s.d}</p>${S.cur&&i===si&&nx?`<div class="bar"><i style="width:${prog}%"></i></div>`:''}${bxC&&i>si&&exStageH(s,bxC)<s.h-0.1?`<div class="exnote">⚡ po treningu ok. ${fmt1(exStageH(s,bxC))} h</div>`:''}</div>`;
   });
   h+=`</div><div class="note">Etapy są orientacyjne — tempo zależy od organizmu, aktywności i ostatniego posiłku.</div></div>`;
 
@@ -798,7 +819,9 @@ function tick(){
   if(sl){ if(S.cur){const el=(now()-S.cur.start)/H, i=stageAt(el), a=STAGES[i], b=STAGES[i+1];
       const t=b?(el-a.h)/(b.h-a.h):1, col=b?mixHex(a.c,b.c,t):a.c;
       const v=`<div class="r1"><span class="d"></span><b>${a.n}</b><span class="nx">etap ${i+1}/${STAGES.length}</span></div><div class="tr"><i style="width:${(t*100).toFixed(1)}%"></i></div>${b?`<div class="r1 muted"><span>Dalej: <b style="color:var(--fg)">${b.n}</b></span><span class="nx">za ${hm((b.h-el)*H)}</span></div>`:''}`;
-      if(sl.innerHTML!==v) sl.innerHTML=v;
+      const bx=exBoost(S.cur), ks=STAGES.find(x=>x.n==='Ketoza');
+      const v2=v+(bx&&el<exStageH(ks,bx)+6?`<button type="button" class="exrow" data-act="exInfo">⚡ <span>Po treningu fazy przyspieszają szacunkowo o <b>${hm(bx.shift*H)}</b> · ketoza ok. ${clock(S.cur.start+exStageH(ks,bx)*H)} zamiast ${clock(S.cur.start+ks.h*H)}</span></button>`:'');
+      if(sl.innerHTML!==v2) sl.innerHTML=v2;
       sl.style.setProperty('--sc',col); sl.style.setProperty('--nc',b?b.c:a.c);
       $('[data-live="knob"]').style.setProperty('--g3',col);
     } else if(sl.innerHTML) sl.innerHTML=''; }
@@ -810,7 +833,10 @@ function tick(){
   if(S.cur){const el=(now()-S.cur.start)/H; let m='';
     STAGES.forEach(s=>{if(!s.m||s.h>scaleH) return; const a=s.h/scaleH*2*Math.PI;
       m+=`<div class="marker ${el>=s.h?'on':''}" style="--st:${s.c};transform:translate(${(R*Math.sin(a)).toFixed(1)}px,${(-R*Math.cos(a)).toFixed(1)}px)" title="${s.n}">${ic(s.ic)}</div>`});
-    if(mk.dataset.sig!==Math.floor(el)+'|'+R.toFixed(0)){mk.innerHTML=m; mk.dataset.sig=Math.floor(el)+'|'+R.toFixed(0)}
+    const bx=exBoost(S.cur), ks=STAGES.find(x=>x.n==='Ketoza');
+    if(bx&&el<exStageH(ks,bx)+6){const kh=exStageH(ks,bx); if(kh<=scaleH){const a=kh/scaleH*2*Math.PI; m+=`<div class="marker ghost" style="--st:${ks.c};transform:translate(${(R*Math.sin(a)).toFixed(1)}px,${(-R*Math.cos(a)).toFixed(1)}px)" title="Ketoza po treningu (szacunek)">⚡</div>`}}
+    const sig=Math.floor(el)+'|'+R.toFixed(0)+'|'+(bx?bx.shift.toFixed(2):'');
+    if(mk.dataset.sig!==sig){mk.innerHTML=m; mk.dataset.sig=sig}
   } else mk.innerHTML='';
 }
 
@@ -1176,6 +1202,12 @@ function sheetHtml(k,d){
       <div style="border-left:3px solid ${sec.c};padding:2px 0 2px 12px;margin-bottom:6px"><b>${sec.t}</b><div class="muted" style="font-size:13px">${sec.sub}</div></div>
       <div class="list">${sec.items.map(it=>`<div class="item" style="align-items:flex-start"><span style="font-size:26px;line-height:1.1;width:34px;text-align:center;flex:none">${it[0]}</span><div class="grow"><div class="t">${esc(it[1])}</div><div class="s" style="line-height:1.4">${esc(it[2])}</div></div></div>`).join('')}</div>
       <div class="btns"><button type="button" class="btn pri" data-act="close">Zamknij</button></div>`;}
+  if(k==='exInfo'){const b=exBoost(S.cur);
+    return `<h2>⚡ Wysiłek a fazy postu</h2><p class="muted" style="margin:0 0 10px;font-size:14px;line-height:1.5">Trening w trakcie postu spala glikogen z mięśni i wątroby, więc organizm szybciej przechodzi na tłuszcz i ketony.</p>
+      ${b?`<div class="list">${b.list.map(x=>`<div class="item"><span style="font-size:22px">🏋️</span><div class="grow"><div class="t">Trening ${esc(x.g.tr||'')} · ${x.kcal} kcal</div><div class="s">w ${fmt1(x.hAt)}. godzinie postu</div></div><div class="r"><div class="v">−${hm(x.shift*H)}</div></div></div>`).join('')}</div>`:''}
+      <div class="suggest" style="margin-top:12px;display:block;line-height:1.5"><b>Skąd te liczby?</b> Badanie BYU (2021): 20 osób, dwa posty po 36 h. Po 45–50 min mocnego biegu na starcie postu ketoza przyszła średnio ok. 3,5 h szybciej (17,5 h zamiast 21 h), a ketonów było o 43% więcej. Przeliczam to proporcjonalnie do kalorii z treningu (500 kcal ≈ pełny efekt) i zmniejszam, gdy trening był późno w poście. Maks. 4 h.</div>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">To szacunek z jednego małego badania — dlatego pokazuję go tylko w tle. Główne koło, etapy i powiadomienia liczą się wg standardowych godzin. Duży, węglowodanowy posiłek przed postem działa w drugą stronę i może zjeść ten zysk.</p>
+      <div class="btns"><button type="button" class="btn pri" data-act="close">OK</button></div>`;}
   if(k==='paste') return `<h2>Wklej kopię</h2><div class="field"><textarea class="f" id="pasteTxt" placeholder="Wklej tu skopiowane dane"></textarea></div>
       <div class="btns"><button type="button" class="btn" data-act="close">Anuluj</button><button type="button" class="btn pri" data-act="pasteDo">Wczytaj</button></div>`;
   return '';
@@ -1253,6 +1285,7 @@ document.addEventListener('click',e=>{
     case 'food': ui.foodK=v||'ok'; openSheet('food'); break;
     case 'foodK': ui.foodK=v; refreshSheet(); $('#sheet').scrollTop=0; break;
     case 'stepsConnect': A&&A.stepsConnect&&A.stepsConnect(); break;
+    case 'exInfo': openSheet('exInfo'); break;
     case 'badge': openSheet('badge',{i:+v}); break;
     case 'tipNext': ui.tipOff=(ui.tipOff||0)+1; render(); break;
     case 'onboardDo': S.onboarded=true; save(); closeSheet(); render(); if(A&&A.notifyState&&A.notifyState()==='ask') A.askNotify(); break;
