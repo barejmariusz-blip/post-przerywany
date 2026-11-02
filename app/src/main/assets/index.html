@@ -445,11 +445,12 @@ let S={
   v:1, plan:'16:8', customH:16, cur:null, fasts:[], weights:[], water:{},
   waterGoal:2000, glass:250, height:null, goalKg:null, theme:'dark',
   notif:{end:true,before:30,win:true,winBefore:30,ongoing:true},
-  onboarded:false, lastBackup:null, dismissedPeerBw:0,
+  onboarded:false, lastBackup:null, dismissedPeerBw:0, steps:{}, stepGoal:10000,
 };
 try{const raw=localStorage.getItem(LS); if(raw){const o=JSON.parse(raw); S=Object.assign(S,o); S.notif=Object.assign({end:true,before:30,win:true,winBefore:30,ongoing:true},o.notif||{});}}catch(e){}
 let ui={tab:'today', calM:null, wRange:90, sheet:null};
 let PEER=null; // Dziennik FBW snapshot
+let STEPS_STATE=null; // ok | perm | install | update | error | null (browser)
 const A=window.Android||null;
 
 /* ================= helpers ================= */
@@ -560,6 +561,55 @@ function gymSessions(){return (PEER&&Array.isArray(PEER.sessions))?PEER.sessions
 function gymInFast(f){const end=f.end||now(); return gymSessions().filter(s=>s.date>=f.start&&s.date<=end)}
 function gymOnDay(k){return gymSessions().filter(s=>dkey(s.date)===k)}
 
+/* ---------- activity: steps (Health Connect) + gym kcal (Dziennik FBW) ---------- */
+function kgNow(){const lw=lastWeight();return lw?lw.kg:(PEER&&PEER.bw)||80}
+const stepKcal=n=>Math.round(n*0.04*kgNow()/70);
+const stepKm=n=>n*((S.height||175)*0.415/100)/1000;
+const stepsOn=k=>S.steps[k]||0;
+function gymKcalOn(k){return gymOnDay(k).reduce((a,s)=>a+(+s.kcal||0),0)}
+function stepsFetch(){try{A&&A.stepsFetch&&A.stepsFetch(30)}catch(e){}}
+window.onSteps=r=>{
+  STEPS_STATE=r&&r.state||'error';
+  if(r&&r.days){for(const k in r.days){const v=+r.days[k]||0; if(v||S.steps[k]) S.steps[k]=v} save()}
+  if(!ui.sheet) render();
+};
+function stepStreak(){let n=0,t=sod(now()); if(stepsOn(dkey(t))<S.stepGoal) t-=DAY; while(stepsOn(dkey(t))>=S.stepGoal){n++;t-=DAY} return n}
+
+function vActivity(){
+  const k=dkey(now()), st=stepsOn(k), g=S.stepGoal, gk=gymKcalOn(k), sk=stepKcal(st);
+  const hasHC=A&&A.stepsSdk;
+  if(!hasHC&&!gk) return '';
+  let h=`<div class="card"><div class="chead"><h3>Aktywność dziś</h3>${STEPS_STATE==='ok'?`<span class="muted" style="font-size:13px">Health Connect</span>`:''}</div>`;
+  if(STEPS_STATE==='ok'){
+    const pc=Math.min(100,st/g*100);
+    h+=`<div class="row" style="gap:16px"><div class="minibox" style="width:76px;height:76px"><div class="mini" style="width:76px;height:76px;--p:${pc};--c:var(--ok);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 8px),#000 calc(100% - 7px));mask:radial-gradient(farthest-side,transparent calc(100% - 8px),#000 calc(100% - 7px))"></div><span style="font-size:22px">👟</span></div>
+      <div class="grow"><div class="num" style="font-size:30px;font-weight:500">${st.toLocaleString('pl-PL')}</div><div class="muted" style="font-size:13px">z ${g.toLocaleString('pl-PL')} kroków · ${fmt1(stepKm(st))} km${stepStreak()>1?` · 🔥 ${stepStreak()} dni`:''}</div></div></div>`;
+  } else if(hasHC){
+    const msg={install:'Zainstaluj Health Connect — zbiera kroki z Samsung Health, Google Fit, Mi Fitness, Garmina i innych.',update:'Zaktualizuj Health Connect, żeby czytać kroki.',perm:'Zezwól na odczyt kroków z Health Connect.',error:'Nie udało się pobrać kroków. Spróbuj ponownie.'}[STEPS_STATE]||'Połącz kroki z telefonu lub zegarka przez Health Connect.';
+    h+=`<div class="suggest" style="margin:0">👟<div class="grow">${msg}</div><button type="button" class="link" style="color:var(--acc);font-weight:600" data-act="stepsConnect">${STEPS_STATE==='install'||STEPS_STATE==='update'?'Pobierz':'Połącz'}</button></div>`;
+  }
+  // kcal summary
+  const tot=(STEPS_STATE==='ok'?sk:0)+gk;
+  if(tot>0) h+=`<div class="tiles" style="grid-template-columns:repeat(3,1fr);margin-top:14px">
+      <div><div class="label">Kroki</div><div class="num" style="font-size:20px">${STEPS_STATE==='ok'?sk:'—'} <span class="muted" style="font-size:12px">kcal</span></div></div>
+      <div><div class="label">Siłownia</div><div class="num" style="font-size:20px">${gk||'—'} <span class="muted" style="font-size:12px">kcal</span></div></div>
+      <div><div class="label">Razem</div><div class="num" style="font-size:20px;color:var(--acc)">${tot} <span class="muted" style="font-size:12px">kcal</span></div></div></div>
+    <div class="note">Szacunek ponad podstawową przemianę materii. Kroki: ok. 0,04 kcal × masa ciała / 70 kg; siłownia: wg Dziennika FBW.</div>`;
+  return h+`</div>`;
+}
+function stepsChart(){
+  const days=[]; for(let i=13;i>=0;i--){const t=sod(now())-i*DAY;days.push({t,v:stepsOn(dkey(t)),g:gymKcalOn(dkey(t))})}
+  const W=340,Hh=150,pl=30,pb=20,pt=10, max=Math.max(S.stepGoal*1.2,...days.map(d=>d.v)), bw=(W-pl)/14, y=v=>pt+(Hh-pt-pb)*(1-v/max);
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Kroki z 14 dni">`;
+  for(const v of [0,S.stepGoal]) s+=`<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${v?'var(--ok)':'var(--line)'}" ${v?'stroke-dasharray="4 4" stroke-opacity=".7"':''}/><text x="${pl-5}" y="${y(v)+3}" text-anchor="end">${v?Math.round(v/1000)+'k':0}</text>`;
+  days.forEach((d,i)=>{const x=pl+i*bw+bw*.2,w=bw*.6,hit=d.v>=S.stepGoal;
+    s+=`<rect x="${x}" y="${y(d.v)}" width="${w}" height="${Math.max(2,y(0)-y(d.v))}" rx="${Math.min(4,w/2)}" fill="${hit?'var(--ok)':'var(--dim)'}" opacity="${hit?1:.7}"/>`;
+    if(d.g) s+=`<text x="${x+w/2}" y="${y(d.v)-4}" text-anchor="middle" style="font-size:9px">🏋️</text>`;
+    if(i%2===0) s+=`<text x="${x+w/2}" y="${Hh-4}" text-anchor="middle">${new Date(d.t).getDate()}</text>`;});
+  const avg=Math.round(days.reduce((a,d)=>a+d.v,0)/14);
+  return s+`</svg><div class="legend"><span><i style="background:var(--ok)"></i>cel ${S.stepGoal.toLocaleString('pl-PL')}</span><span>🏋️ trening</span><span>średnio ${avg.toLocaleString('pl-PL')} / dzień</span></div>`;
+}
+
 /* ================= render ================= */
 function haptic(ms){try{A&&A.vibrate&&A.vibrate(ms)}catch(e){}}
 let toastT;
@@ -627,6 +677,7 @@ function vToday(){
 
   // gym
   h+=vGymCard();
+  h+=vActivity();
 
   // water
   const wt=waterToday(), wp=Math.min(100,wt/S.waterGoal*100);
@@ -800,6 +851,7 @@ function vProg(){
   const last=fs.slice(-21);
   h+=`<div class="card"><div class="chead"><h3>Ostatnie posty</h3><span class="muted" style="font-size:13px">godziny</span></div>${last.length?fastChart(last):`<div class="empty">${ic('chart')}<div>Wykres pojawi się po pierwszym poście.</div></div>`}</div>`;
 
+  if(STEPS_STATE==='ok'||Object.keys(S.steps).length) h+=`<div class="card"><div class="chead"><h3>Kroki · 14 dni</h3></div>${stepsChart()}</div>`;
   // weight
   const ws=weightsSorted(), lw=lastWeight();
   h+=`<div class="card"><div class="chead"><h3>Waga</h3><button type="button" class="link" data-act="weightSheet">+ Dodaj</button></div>`;
@@ -857,6 +909,16 @@ function achievements(){
   add('Ciało','drop','Wodnik','Cel wody 7 dni z rzędu',waterStreak(),7);
   add('Ciało','drop','Wielbłąd na odwrót','Cel wody 30 dni z rzędu',waterStreak(),30);
   add('Ciało','drop','Hydrant','4 litry wody jednego dnia',Math.floor(wmax/100)/10,4);
+  // Kroki
+  const sv=Object.values(S.steps), smax=Math.max(0,...sv), stot=sv.reduce((a,b)=>a+b,0);
+  add('Kroki','check','Pierwsze 10 000','Dzień z min. 10 000 kroków',smax,10000);
+  add('Kroki','bolt','Dwadzieścia tysięcy','Dzień z min. 20 000 kroków',smax,20000);
+  add('Kroki','up','Trzydziestka','Dzień z min. 30 000 kroków. Gdzie Ty byłeś?',smax,30000);
+  add('Kroki','flame','Tydzień w ruchu','Cel kroków 7 dni z rzędu',stepStreak(),7);
+  add('Kroki','flame','Miesiąc w ruchu','Cel kroków 30 dni z rzędu',stepStreak(),30);
+  add('Kroki','spark','Milioner','Milion kroków łącznie (od połączenia)',stot,1000000);
+  add('Kroki','dumb','Pełen pakiet','Jednego dnia: cel postu, cel kroków i trening',Object.keys(S.steps).some(k=>S.steps[k]>=S.stepGoal&&gymOnDay(k).length&&S.fasts.some(f=>reached(f)&&dkey(f.end)===k))?1:0,1);
+  add('Kroki','moon','Lunatyk','10 000 kroków w trakcie dnia z postem ponad 20 h',Object.keys(S.steps).some(k=>S.steps[k]>=10000&&S.fasts.some(f=>dkey(f.end)===k&&(f.end-f.start)>=20*H))?1:0,1,1);
   // Trening (Dziennik FBW)
   add('Trening','dumb','Na czczo','Trening w trakcie postu (Dziennik FBW)',gym,1);
   add('Trening','dumb','Głodny wilk','10 treningów na czczo',gym,10);
@@ -942,6 +1004,7 @@ function vSet(){
   h+=`<div class="card"><div class="chead"><h3>Ciało i woda</h3></div>
     <div class="set"><div class="t">Wzrost (cm)</div><input class="f sm" inputmode="numeric" data-k="height" value="${S.height||''}" placeholder="np. 182"></div>
     <div class="set"><div class="t">Waga docelowa (kg)</div><input class="f sm" inputmode="decimal" data-k="goalKg" value="${S.goalKg?fmt1(S.goalKg):''}" placeholder="np. 80"></div>
+    <div class="set"><div class="t">Cel kroków</div><select class="f sm" data-k="stepGoal">${[5000,6000,8000,10000,12000,15000,20000].map(v=>`<option value="${v}" ${S.stepGoal==v?'selected':''}>${v.toLocaleString('pl-PL')}</option>`).join('')}</select></div>
     <div class="set"><div class="t">Woda dziennie (ml)</div><input class="f sm" inputmode="numeric" data-k="waterGoal" value="${S.waterGoal}"></div>
     <div class="set"><div class="t">Szklanka (ml)</div><select class="f sm" data-k="glass">${[200,250,300,330,500].map(v=>`<option ${S.glass==v?'selected':''}>${v}</option>`).join('')}</select></div></div>`;
 
@@ -1111,6 +1174,7 @@ document.addEventListener('click',e=>{
     case 'pasteDo': try{importData(JSON.parse($('#pasteTxt').value))}catch(err){toast('To nie wygląda na kopię z tej aplikacji')} break;
     case 'food': ui.foodK=v||'ok'; openSheet('food'); break;
     case 'foodK': ui.foodK=v; refreshSheet(); $('#sheet').scrollTop=0; break;
+    case 'stepsConnect': A&&A.stepsConnect&&A.stepsConnect(); break;
     case 'badge': openSheet('badge',{i:+v}); break;
     case 'tipNext': ui.tipOff=(ui.tipOff||0)+1; render(); break;
     case 'onboardDo': S.onboarded=true; save(); closeSheet(); render(); if(A&&A.notifyState&&A.notifyState()==='ask') A.askNotify(); break;
@@ -1124,6 +1188,7 @@ document.addEventListener('change',e=>{
   else if(k==='goalKg'){const v=num(t.value);S.goalKg=v&&v>25&&v<350?v:null}
   else if(k==='waterGoal'){const v=num(t.value);S.waterGoal=v&&v>=250&&v<=8000?Math.round(v):2000}
   else if(k==='glass'){S.glass=+t.value}
+  else if(k==='stepGoal'){S.stepGoal=+t.value}
   else if(k==='customH'){const v=num(t.value);S.customH=v&&v>=10&&v<=96?Math.round(v):16}
   else return;
   save(); render();
@@ -1133,7 +1198,7 @@ $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0]; if(!f) ret
 
 /* native hooks */
 window.onBack=()=>{if(ui.sheet&&ui.sheet.kind!=='onboard'){closeSheet();return true} if(ui.tab!=='today'){ui.tab='today';render();return true} return false};
-window.onNativeResume=()=>{loadPeer(); publish(); if(!ui.sheet) render()};
+window.onNativeResume=()=>{loadPeer(); publish(); stepsFetch(); if(!ui.sheet) render()};
 window.onNativeAction=act=>{
   ui.tab='today'; render();
   if(act==='start'&&!S.cur){const w=windowInfo(); openSheet('start',{at:w&&w.end<now()?w.end:now()})}
@@ -1141,7 +1206,7 @@ window.onNativeAction=act=>{
 };
 
 /* ================= boot ================= */
-applyTheme(); loadPeer(); render(); syncNative();
+applyTheme(); loadPeer(); render(); syncNative(); stepsFetch();
 setInterval(()=>{if(ui.tab==='today') tick()},1000);
 let lastDay=dkey(now()); setInterval(()=>{if(dkey(now())!==lastDay){lastDay=dkey(now());render()}},60e3);
 if(!S.onboarded&&!S.fasts.length&&!S.cur) openSheet('onboard');

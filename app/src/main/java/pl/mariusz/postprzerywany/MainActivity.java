@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
     private String pendingAct;
+    private Health health;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -58,6 +59,7 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true);
 
+        health = new Health(this, web);
         web.addJavascriptInterface(new Bridge(), "Android");
 
         web.setWebViewClient(new WebViewClient() {
@@ -115,7 +117,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == FILE_REQ && fileCallback != null) {
+        if (requestCode == Health.REQ) {
+            health.onResult();
+        } else if (requestCode == FILE_REQ && fileCallback != null) {
             Uri[] result = null;
             if (resultCode == RESULT_OK && data != null && data.getData() != null) result = new Uri[]{data.getData()};
             fileCallback.onReceiveValue(result);
@@ -248,6 +252,17 @@ public class MainActivity extends Activity {
             pendingAct = null;
             return a == null ? "" : a;
         }
+
+        /** Steps from Health Connect: "ok" | "install" | "update" */
+        @JavascriptInterface
+        public String stepsSdk() { return health.sdk(); }
+
+        @JavascriptInterface
+        public void stepsConnect() { health.request(); }
+
+        /** Result arrives later through window.onSteps(...) */
+        @JavascriptInterface
+        public void stepsFetch(int days) { health.fetch(days); }
 
         /** Snapshot that Dziennik FBW can read through ShareProvider. */
         @JavascriptInterface
