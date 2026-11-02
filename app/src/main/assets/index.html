@@ -82,6 +82,16 @@ body.idle .ringbox{--g1:var(--dim);--g2:var(--dim);--g3:var(--dim)}
 
 .stline{width:100%;display:flex;flex-direction:column;gap:6px;margin:2px 0 10px;min-height:0}
 .stline:empty{display:none}
+.track2,.ring2{position:absolute;inset:25px;border-radius:50%;
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 7px),#000 calc(100% - 6px));
+          mask:radial-gradient(farthest-side,transparent calc(100% - 7px),#000 calc(100% - 6px))}
+.track2{background:color-mix(in srgb,var(--warn) 10%,transparent)}
+.ring2{background:conic-gradient(color-mix(in srgb,var(--warn) 55%,transparent) 0,var(--warn) var(--p2),transparent 0);opacity:.9}
+.knob2{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px;border-radius:50%;display:grid;place-items:center;font-size:10px;
+  background:var(--bg2);border:1.5px solid var(--warn);color:var(--warn);box-shadow:0 0 10px color-mix(in srgb,var(--warn) 60%,transparent)}
+.ringbox.boost .center{inset:38px}
+.center .eff{font-size:12px;color:var(--warn);margin-top:2px;min-height:0}
+.center .eff:empty{display:none}
 .exrow{display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:12px;line-height:1.4;color:var(--muted);background:color-mix(in srgb,var(--warn) 8%,transparent);border:1px dashed color-mix(in srgb,var(--warn) 40%,transparent);border-radius:10px;padding:7px 10px;margin-top:2px}
 .exrow b{color:var(--fg);font-weight:600}
 .marker.ghost{background:transparent;border:1.5px dashed color-mix(in srgb,var(--warn) 70%,transparent);color:var(--warn);opacity:.75;font-size:12px;box-shadow:none}
@@ -675,8 +685,8 @@ function vToday(){
     <button type="button" class="pill" data-act="planSheet">${esc(planLabel())} ${ic('chevd')}</button></div></header>`;
 
   h+=`<section class="hero"><div class="mode"><span class="dot"></span><span data-live="mode"></span></div>
-    <div class="ringbox"><div class="track"></div><div class="ring" data-live="ring"></div><div data-live="markers"></div><div class="knob" data-live="knob"></div>
-      <div class="center"><div class="cap" data-live="cap"></div><div class="big" data-live="big"></div><div class="rem" data-live="rem"></div><div class="pct" data-live="pct"></div></div></div><div class="stline" data-live="stline"></div>`;
+    <div class="ringbox"><div class="track"></div><div class="ring" data-live="ring"></div><div class="track2" data-live="track2" hidden></div><div class="ring2" data-live="ring2" hidden></div><div class="knob2" data-live="knob2" hidden>⚡</div><div data-live="markers"></div><div class="knob" data-live="knob"></div>
+      <div class="center"><div class="cap" data-live="cap"></div><div class="big" data-live="big"></div><div class="rem" data-live="rem"></div><div class="eff" data-live="eff"></div><div class="pct" data-live="pct"></div></div></div><div class="stline" data-live="stline"></div>`;
   if(S.cur){
     const end=S.cur.start+S.cur.goalH*H;
     h+=`<div class="times">
@@ -814,13 +824,22 @@ function tick(){
     }
   }
   box.style.setProperty('--p',(p*100).toFixed(2)+'%');
+  // inner "ring under the ring": biological time estimated with the training boost (background info only)
+  {const r2=$('[data-live="ring2"]'),t2=$('[data-live="track2"]'),k2=$('[data-live="knob2"]'),ef=$('[data-live="eff"]'),bx=S.cur?exBoost(S.cur):null,on=!!bx;
+   r2.hidden=t2.hidden=k2.hidden=!on; box.parentNode.classList.toggle('boost',on);
+   if(on){const el=now()-S.cur.start, g=S.cur.goalH*H, fh=bx.first*H, eff=el<fh?el:el+Math.min(bx.shift*H,el-fh), p2=Math.min(1,eff/g);
+     r2.style.setProperty('--p2',(p2*100).toFixed(2)+'%');
+     const R2=box.getBoundingClientRect().width/2-28.5, a2=p2*2*Math.PI; k2.style.transform=`translate(${(R2*Math.sin(a2)).toFixed(1)}px,${(-R2*Math.cos(a2)).toFixed(1)}px)`;
+     const tx='⚡ z treningiem ~'+hms(eff).slice(0,5); if(ef.textContent!==tx) ef.textContent=tx;
+   } else if(ef.textContent) ef.textContent='';}
   // stage line: current phase, smooth blend into the next one
   const sl=$('[data-live="stline"]');
   if(sl){ if(S.cur){const el=(now()-S.cur.start)/H, i=stageAt(el), a=STAGES[i], b=STAGES[i+1];
       const t=b?(el-a.h)/(b.h-a.h):1, col=b?mixHex(a.c,b.c,t):a.c;
       const v=`<div class="r1"><span class="d"></span><b>${a.n}</b><span class="nx">etap ${i+1}/${STAGES.length}</span></div><div class="tr"><i style="width:${(t*100).toFixed(1)}%"></i></div>${b?`<div class="r1 muted"><span>Dalej: <b style="color:var(--fg)">${b.n}</b></span><span class="nx">za ${hm((b.h-el)*H)}</span></div>`:''}`;
       const bx=exBoost(S.cur), ks=STAGES.find(x=>x.n==='Ketoza');
-      const v2=v+(bx&&el<exStageH(ks,bx)+6?`<button type="button" class="exrow" data-act="exInfo">⚡ <span>Po treningu fazy przyspieszają szacunkowo o <b>${hm(bx.shift*H)}</b> · ketoza ok. ${clock(S.cur.start+exStageH(ks,bx)*H)} zamiast ${clock(S.cur.start+ks.h*H)}</span></button>`:'');
+      const effEl=bx?(el<bx.first?el:el+Math.min(bx.shift,el-bx.first)):el;
+      const v2=v+(bx&&el<exStageH(ks,bx)+6?`<button type="button" class="exrow" data-act="exInfo">⚡ <span>Wewnętrzne koło: organizm po treningu jest ok. <b>${hm(bx.shift*H)}</b> do przodu — szacunkowo już <b>${STAGES[stageAt(effEl)].n}</b>. Ketoza ok. ${clock(S.cur.start+exStageH(ks,bx)*H)} zamiast ${clock(S.cur.start+ks.h*H)}.</span></button>`:'');
       if(sl.innerHTML!==v2) sl.innerHTML=v2;
       sl.style.setProperty('--sc',col); sl.style.setProperty('--nc',b?b.c:a.c);
       $('[data-live="knob"]').style.setProperty('--g3',col);
