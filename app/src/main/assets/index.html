@@ -830,7 +830,7 @@ function tick(){
    if(on){const el=now()-S.cur.start, g=S.cur.goalH*H, fh=bx.first*H, eff=el<fh?el:el+Math.min(bx.shift*H,el-fh), p2=Math.min(1,eff/g);
      r2.style.setProperty('--p2',(p2*100).toFixed(2)+'%');
      const R2=box.getBoundingClientRect().width/2-28.5, a2=p2*2*Math.PI; k2.style.transform=`translate(${(R2*Math.sin(a2)).toFixed(1)}px,${(-R2*Math.cos(a2)).toFixed(1)}px)`;
-     const tx='⚡ z treningiem ~'+hms(eff).slice(0,5); if(ef.textContent!==tx) ef.textContent=tx;
+     const tx='⚡ z treningiem jak '+hm(eff)+' postu'; if(ef.textContent!==tx) ef.textContent=tx;
    } else if(ef.textContent) ef.textContent='';}
   // stage line: current phase, smooth blend into the next one
   const sl=$('[data-live="stline"]');
