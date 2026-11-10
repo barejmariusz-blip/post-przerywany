@@ -83,8 +83,12 @@ class Health(private val act: Activity, private val web: WebView) {
                     )
                 }
                 val map = JSONObject()
-                for (g in res) map.put(g.startTime.toLocalDate().toString(), g.result[StepsRecord.COUNT_TOTAL] ?: 0L)
-                out.put("state", "ok").put("days", map)
+                val src = sortedSetOf<String>()
+                for (g in res) {
+                    map.put(g.startTime.toLocalDate().toString(), g.result[StepsRecord.COUNT_TOTAL] ?: 0L)
+                    for (o in g.result.dataOrigins) src.add(o.packageName)
+                }
+                out.put("state", "ok").put("days", map).put("sources", org.json.JSONArray(src.toList()))
             } catch (e: Exception) {
                 out.put("state", "error").put("msg", e.javaClass.simpleName)
             }

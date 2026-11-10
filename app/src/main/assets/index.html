@@ -616,9 +616,13 @@ const stepKcal=n=>Math.round(n*0.04*kgNow()/70);
 const stepKm=n=>n*((S.height||175)*0.415/100)/1000;
 const stepsOn=k=>S.steps[k]||0;
 function gymKcalOn(k){return gymOnDay(k).reduce((a,s)=>a+(+s.kcal||0),0)}
+let STEPS_SRC=[],STEPS_EMPTY=false;
+const SRC_NAMES={'com.sec.android.app.shealth':'Samsung Health','com.google.android.apps.fitness':'Google Fit','com.xiaomi.wearable':'Mi Fitness','com.mi.health':'Mi Fitness','com.huawei.health':'Huawei Zdrowie','com.garmin.android.apps.connectmobile':'Garmin Connect','com.fitbit.FitbitMobile':'Fitbit','com.google.android.apps.healthdata':'Health Connect (telefon)','android':'Telefon (Android)'};
+const srcName=p=>SRC_NAMES[p]||p;
 function stepsFetch(){try{A&&A.stepsFetch&&A.stepsFetch(30)}catch(e){}}
 window.onSteps=r=>{
-  STEPS_STATE=r&&r.state||'error';
+  STEPS_STATE=r&&r.state||'error'; STEPS_SRC=r&&r.sources||[];
+  STEPS_EMPTY=!!(r&&r.state==='ok'&&r.days&&!Object.values(r.days).some(v=>+v>0));
   if(r&&r.days){for(const k in r.days){const v=+r.days[k]||0; if(v||S.steps[k]) S.steps[k]=v} save()}
   if(!ui.sheet) render();
 };
@@ -628,8 +632,15 @@ function vActivity(){
   const k=dkey(now()), st=stepsOn(k), g=S.stepGoal, gk=gymKcalOn(k), sk=stepKcal(st);
   const hasHC=A&&A.stepsSdk;
   if(!hasHC&&!gk) return '';
-  let h=`<div class="card"><div class="chead"><h3>Aktywność dziś</h3>${STEPS_STATE==='ok'?`<span class="muted" style="font-size:13px">Health Connect</span>`:''}</div>`;
-  if(STEPS_STATE==='ok'){
+  let h=`<div class="card"><div class="chead"><h3>Aktywność dziś</h3>${STEPS_STATE==='ok'?`<span class="muted" style="font-size:13px">${STEPS_SRC.length?STEPS_SRC.map(srcName).join(', '):'Health Connect'}</span>`:''}</div>`;
+  if(STEPS_STATE==='ok'&&STEPS_EMPTY){
+    h+=`<div class="suggest" style="margin:0;align-items:flex-start">👟<div class="grow"><b>Połączone, ale Health Connect nie ma żadnych kroków z ostatnich 30 dni.</b><br>
+      Aplikacja, która liczy kroki w telefonie, nie zapisuje ich do Health Connect. Włącz to w niej:<br>
+      • <b>Samsung Health</b>: ⋮ → Ustawienia → Health Connect → zezwól na zapis „Kroki”.<br>
+      • <b>Google Fit / Mi Fitness / Garmin</b>: ustawienia aplikacji → Health Connect → zapis kroków.<br>
+      • albo w <b>Health Connect</b> → Aplikacje → wybierz aplikację z krokami → włącz „Kroki”.<br>
+      Potem wróć tutaj – kroki pobiorą się same.</div></div>`;
+  } else if(STEPS_STATE==='ok'){
     const pc=Math.min(100,st/g*100);
     h+=`<div class="row" style="gap:16px"><div class="minibox" style="width:76px;height:76px"><div class="mini" style="width:76px;height:76px;--p:${pc};--c:var(--ok);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 8px),#000 calc(100% - 7px));mask:radial-gradient(farthest-side,transparent calc(100% - 8px),#000 calc(100% - 7px))"></div><span style="font-size:22px">👟</span></div>
       <div class="grow"><div class="num" style="font-size:30px;font-weight:500">${st.toLocaleString('pl-PL')}</div><div class="muted" style="font-size:13px">z ${g.toLocaleString('pl-PL')} kroków · ${fmt1(stepKm(st))} km${stepStreak()>1?` · 🔥 ${stepStreak()} dni`:''}</div></div></div>`;
