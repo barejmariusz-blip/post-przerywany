@@ -15,7 +15,7 @@
   --e1:#34d399; --e2:#22d3ee;                         /* eating gradient */
   --acc:#ff8a5b; --ok:#34d399; --warn:#fbbf24; --water:#38bdf8;
   --display:"Outfit",system-ui,sans-serif; --body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --r:20px; color-scheme:dark;
+  --r:20px; --sb-bottom:76px; color-scheme:dark;
 }
 :root[data-theme="light"]{
   --bg:#f5f3f0; --bg2:#ece9e4; --surface:#ffffff; --surface2:#f1eee9; --line:#e2ddd6;
@@ -307,6 +307,7 @@ textarea.f{min-height:80px;resize:vertical}
 <div class="toast" id="toast" role="status"></div>
 <input type="file" id="fileIn" accept=".json,application/json,text/plain" hidden>
 
+<script src="szef-biceps.js"></script>
 <script>
 'use strict';
 /* ================= constants ================= */
@@ -581,7 +582,7 @@ function loadPeer(){
 function startFast(at){
   at=at||now();
   S.cur={start:Math.min(at,now()),goalH:planObj().f};
-  save(); haptic(30); render(); toast('Post wystartował. Powodzenia!');
+  save(); haptic(30); render(); toast('Post wystartował. Powodzenia!'); sbStart();
 }
 function endFast(at,mood,note){
   if(!S.cur) return;
@@ -687,7 +688,7 @@ function render(){
   const v={today:vToday,hist:vHist,prog:vProg,set:vSet}[ui.tab]();
   $('#app').innerHTML=v;
   const sn=document.querySelector('.stage.now'); if(sn){const pr=sn.parentNode; pr.scrollLeft+=sn.getBoundingClientRect().left-pr.getBoundingClientRect().left-16;}
-  tick();
+  tick(); SB.refresh();
 }
 
 /* ---------- TODAY ---------- */
@@ -1150,6 +1151,11 @@ function vSet(){
   else h+=`<div style="font-weight:600">Nie znaleziono</div><div class="muted" style="font-size:13px">Zainstaluj Dziennik FBW — aplikacje połączą się same.</div>`;
   h+=`</div></div></div>`;
 
+  {const m=mz(); h+=`<div class="card"><div class="chead"><h3>Szef Biceps</h3><button type="button" class="link" style="color:var(--acc);font-weight:600" data-act="sbTest">Zawołaj</button></div>
+    <div class="muted" style="font-size:13px">Maskotka, która komentuje twój post. Stuknij go, a coś powie.</div>
+    <div class="field"><span class="label">Jak często się odzywa</span><div class="seg">${[['off','Wył.'],['rare','Rzadko'],['normal','Normalnie'],['often','Często']].map(([v,l])=>`<button type="button" data-act="sbMode" data-v="${v}" aria-pressed="${m.mode===v}">${l}</button>`).join('')}</div></div>
+    <div class="field"><span class="label">Charakter</span><div class="seg">${[['soft','Łagodny'],['sharp','Złośliwy']].map(([v,l])=>`<button type="button" data-act="sbTone" data-v="${v}" aria-pressed="${m.tone===v}">${l}</button>`).join('')}</div></div>
+    <div class="set"><div><div class="t">Wygląda zza krawędzi</div><div class="s">Na ekranie Post, gdy nic nie mówi</div></div>${sw('sbPeek',m.peek)}</div></div>`;}
   h+=`<div class="card"><div class="chead"><h3>Wygląd</h3></div><div class="seg">${[['dark','Ciemny'],['light','Jasny'],['auto','Systemowy']].map(([v,l])=>`<button type="button" data-act="theme" data-v="${v}" aria-pressed="${S.theme===v}">${l}</button>`).join('')}</div></div>`;
 
   h+=`<div class="card"><div class="chead"><h3>Kopia danych</h3></div>
@@ -1172,10 +1178,12 @@ function openSheet(kind,data){
   const b=$('#sheetBody'); b.innerHTML=sheetHtml(kind,data||{});
   $('#scrim').hidden=false; $('#sheet').hidden=false;
   requestAnimationFrame(()=>{$('#scrim').classList.add('open');$('#sheet').classList.add('open')});
+  SB.hide();
 }
 function closeSheet(){
   ui.sheet=null; $('#scrim').classList.remove('open'); $('#sheet').classList.remove('open');
   setTimeout(()=>{if(!ui.sheet){$('#scrim').hidden=true;$('#sheet').hidden=true}},280);
+  SB.refresh();
 }
 function sheetHtml(k,d){
   if(k==='start'){
@@ -1261,6 +1269,93 @@ function importData(o){
   S=Object.assign(S,st); save(); applyTheme(); closeSheet(); render(); toast('Wczytano kopię');
 }
 
+/* ================= Szef Biceps (maskotka) ================= */
+const SB=window.SzefBiceps||{init(){},say(){return false},hide(){},refresh(){}};
+function mz(){if(!S.mascot||!S.mascot.mode) S.mascot=Object.assign({mode:'normal',tone:'sharp',peek:true},S.mascot||{}); return S.mascot}
+const SB_LINES={
+  start:{mood:'flex',
+    sharp:['Post wystartował. Lodówka zamknięta, klucz jest u mnie.','Kuchnia zamknięta. Otwieram za {h}.','Zaczynamy. Jak zgłodniejesz, pij wodę i patrz na mój biceps.'],
+    soft:['Post wystartował. Trzymam kciuki, szefie!','Dobry start. Cel: {h}. Dasz radę.','Kuchnia na przerwie. Woda i spokój.']},
+  startStreak:{mood:'flex',
+    sharp:['{n}. dzień z rzędu. Zaczynam się bać, że nie będę ci potrzebny.','Seria {n} dni. Lodówka złożyła skargę, że się nudzi.'],
+    soft:['Seria {n} dni! Tak się buduje formę.','{n} dni z rzędu. Jestem dumny, szefie.']},
+  endOk:{mood:'flex',
+    sharp:['Post zaliczony. Białko najpierw, ciastko nigdy.','Cel zrobiony. Patelnia rozgrzana, jajka czekają.','Brawo. Teraz jedz jak sportowiec, nie jak szop pracz.'],
+    soft:['Brawo, post zaliczony! Zacznij od białka i warzyw.','Cel osiągnięty. Smacznego, szefie!']},
+  endEarly:{mood:'shock',
+    sharp:['Wcześniej? No dobra. Nie powiem nikomu. Może.','Zabrakło {h}. Widziałem to. Zapisałem to.','Skrót przez lodówkę? Jutro nadrobimy.'],
+    soft:['Wcześniej, ale też się liczy. Jutro kolejna próba.','Zabrakło {h}, nic się nie stało. Liczą się tygodnie, nie jeden dzień.']},
+  almost:{mood:'happy',
+    sharp:['Zostało {h}. Patelnia już się grzeje.','Ostatnia prosta: {h}. Zjesz teraz, to cię zapamiętam.'],
+    soft:['Jeszcze {h}. Prawie meta!','Ostatnie {h}. Wytrzymaj, jest blisko.']},
+  goal:{mood:'flex',
+    sharp:['Cel {g} h zrobiony! Możesz jeść albo dalej udawać mnicha.','Ding! Cel zaliczony. Kuchnia otwarta.'],
+    soft:['Cel {g} h osiągnięty! Możesz kończyć post.','Gotowe! Kuchnia otwarta, smacznego.']},
+  over:{mood:'shock',
+    sharp:['Cel minął {h} temu. Ambicja czy zapomniałeś kliknąć?','Jesteś {h} ponad celem. Zakończ post, bo zaczynam się martwić.'],
+    soft:['Jesteś {h} ponad celem. Pamiętaj zakończyć post w aplikacji.','{h} ponad celem. Wszystko OK? Nie zapomnij zakończyć.']},
+  stage:{mood:'happy',
+    sharp:['Nowy etap: <b>{stage}</b>. Brzuch protestuje, ale tłuszcz już się pakuje.','Wchodzisz w etap: <b>{stage}</b>. Tak się gotuje formę.'],
+    soft:['Nowy etap: <b>{stage}</b>. Idzie świetnie!','Etap: <b>{stage}</b>. Organizm robi swoje.']},
+  lastCall:{mood:'happy',
+    sharp:['Okno zamyka się za {h}. Ostatnie zamówienia przyjmuję teraz.','Za {h} zamykam kuchnię. Kto nie zjadł, ten pości.'],
+    soft:['Okno zamyka się za {h}. Czas na ostatni posiłek.','Za {h} start postu. Zjedz coś sycącego.']},
+  late:{mood:'angry',
+    sharp:['Widzę, że próbujesz zjeść o {t}. Potrzebujesz pomocy?','{t} i okno dalej otwarte? Nocna kuchnia to nie plan treningowy.'],
+    soft:['Jest {t}. Może zacznij post przed snem?','Późno już. Post przez sen idzie najłatwiej.']},
+  idle:{mood:'sleepy',
+    sharp:['Okno zamknięte od {h}, a postu brak. Mam kliknąć za ciebie?','Nudzę się. Wystartuj post, bo zacznę gotować sam.'],
+    soft:['Okno zamknęło się {h} temu. Wystartujesz post?','Gotowy na kolejny post? Jeden klik.']},
+  gymFast:{mood:'flex',
+    sharp:['Trening na czczo? Szacun. Organizm przeskoczył kilka godzin do przodu.','Trening w poście. Teraz wiesz, skąd mam takie bicepsy.'],
+    soft:['Trening na czczo zapisany. Szybciej wejdziesz w spalanie tłuszczu.','Świetny trening! Po poście zjedz porządną porcję białka.']},
+  water:{mood:'happy',
+    sharp:['Cel wody zrobiony. Nerki wysłały ci kartkę z podziękowaniami.','Woda: komplet. Nareszcie ktoś słucha szefa.'],
+    soft:['Cel wody osiągnięty. Brawo!','Komplet wody na dziś. Super.']},
+  weightDown:{mood:'flex',
+    sharp:['-{d} kg. Waga cię lubi. Ja też, trochę.','Mniej o {d} kg. Tak się to robi, szefie.'],
+    soft:['-{d} kg od ostatniego ważenia. Świetnie!','Waga w dół o {d} kg. Tak trzymaj.']},
+  weightUp:{mood:'shock',
+    sharp:['+{d} kg. Woda, sól albo pizza. Nie pytam, które.','+{d} kg. Spokojnie, waga skacze. Patrzymy na trend, nie na jeden dzień.'],
+    soft:['+{d} kg. Waga z dnia na dzień skacze, liczy się trend.','Lekki wzrost, nic strasznego. Patrz na tydzień, nie na dzień.']},
+  helloM:{mood:'happy',
+    sharp:['Dzień dobry. Kawa czarna, bez cukru. Sprawdzę.','Pobudka, szefie. Dziś robimy formę.'],
+    soft:['Dzień dobry! Dobrego dnia, szefie.','Hej! Kawa bez cukru i lecimy.']},
+  helloD:{mood:'happy',
+    sharp:['O, jesteś. Myślałem, że uciekłeś do piekarni.','Siema. Biceps napięty, plan gotowy.'],
+    soft:['Hej! Jak idzie dzień?','Cześć, szefie! Wszystko pod kontrolą.']},
+  helloE:{mood:'happy',
+    sharp:['Wieczór. Najgroźniejsza pora dla lodówki.','Dobry wieczór. Podjadanie zapisuję w zeszycie.'],
+    soft:['Dobry wieczór! Spokojny wieczór, spokojny post.','Wieczór. Dobra pora, żeby zamknąć okno jedzenia.']},
+  helloN:{mood:'sleepy',
+    sharp:['Czemu nie śpisz? Jeśli idziesz do lodówki, to ja nic nie widziałem.','Noc. Najlepszy post to ten przespany.'],
+    soft:['Późno już. Sen bardzo pomaga w poście.','Dobranoc, szefie. Post przez sen to najłatwiejsze godziny.']},
+  tap:{mood:'flex',
+    sharp:['Co? Nie widzisz, że pozuję?','Głodny? Napij się wody. Dalej głodny? Druga szklanka.','Hantel w jednej, łopatka w drugiej. Równowaga.','Stuknij jeszcze raz, a dostaniesz serię przysiadów.','Czarna kawa nie przerywa postu. Latte z syropem tak, i to z rozpędu.','Głód przychodzi falami i mija po kilkunastu minutach. Ja nie mijam.'],
+    soft:['Hej! Pamiętaj o wodzie.','Głód przychodzi falami i mija po kilkunastu minutach.','Czarna kawa i herbata nie przerywają postu.','Pierwszy posiłek po poście: białko i warzywa.','Sen to połowa sukcesu postu.']},
+};
+function sbStart(){const n=streak().cur; if(n>=3) SB.say('startStreak',{force:true,ctx:{n:n+1}}); else SB.say('start',{force:true,ctx:{h:S.cur.goalH+' h'}})}
+function sbHello(){const hr=new Date().getHours(), k=hr>=5&&hr<11?'helloM':hr>=11&&hr<18?'helloD':hr>=18&&hr<23?'helloE':'helloN'; SB.say(k,{once:dkey(now())+k})}
+function sbTick(){
+  if(mz().mode==='off') return;
+  const t=now();
+  if(S.cur){
+    const el=t-S.cur.start, g=S.cur.goalH*H, id=S.cur.start;
+    if(el>=g+4*H) SB.say('over',{once:id,ctx:{h:hm(el-g)}});
+    else if(el>=g) SB.say('goal',{once:id,ctx:{g:S.cur.goalH}});
+    else if(g>=8*H&&g-el<=30*MIN) SB.say('almost',{once:id,ctx:{h:hm(g-el)}});
+    else {const i=stageAt(el/H), s=STAGES[i]; if(i>0&&s.m&&el/H-s.h<1) SB.say('stage',{once:id+'-'+i,auto:true,ctx:{stage:s.n}})}
+    gymInFast(S.cur).forEach(x=>{if(t-x.date<6*H) SB.say('gymFast',{once:x.date})});
+  } else {
+    const w=windowInfo(); if(!w) return;
+    if(w.open){const left=w.end-t, hr=new Date().getHours();
+      if(left<=30*MIN) SB.say('lastCall',{once:w.end,ctx:{h:hm(left)}});
+      else if(hr>=22||hr<3) SB.say('late',{once:dkey(t),ctx:{t:clock(t)}});
+    } else if(t-w.end>2*H&&!schedOff()) SB.say('idle',{once:w.end,auto:true,ctx:{h:hm(t-w.end)}});
+  }
+}
+SB.init({lines:SB_LINES, settings:mz, canShow:()=>!ui.sheet&&!document.hidden, peekHere:()=>ui.tab==='today'&&!ui.sheet, haptic});
+
 /* ================= events ================= */
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]'); if(!t) return;
@@ -1280,14 +1375,14 @@ document.addEventListener('click',e=>{
     case 'goalSet': S.cur.goalH=+v; save(); closeSheet(); render(); break;
     case 'endSheet': ui.mood=null; openSheet('end'); break;
     case 'mood': ui.mood=+v; t.parentNode.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t)); break;
-    case 'endDo': {const at=fromLocal(($('#endAt')||{}).value)||now(); const ok=S.cur&&(at-S.cur.start)>=S.cur.goalH*H-30e3; endFast(at,ui.mood,(($('#endNote')||{}).value||'').trim()); ui.mood=null; closeSheet(); render(); toast(ok?'Świetna robota! Post zapisany 🎉':'Post zapisany'); break}
-    case 'water': {const k=dkey(now()); S.water[k]=Math.max(0,(S.water[k]||0)+(+v)*S.glass); save(); haptic(15); render(); break}
+    case 'endDo': {const at=fromLocal(($('#endAt')||{}).value)||now(); const ok=S.cur&&(at-S.cur.start)>=S.cur.goalH*H-30e3, miss=S.cur?S.cur.goalH*H-(at-S.cur.start):0; endFast(at,ui.mood,(($('#endNote')||{}).value||'').trim()); ui.mood=null; closeSheet(); render(); toast(ok?'Świetna robota! Post zapisany 🎉':'Post zapisany'); SB.say(ok?'endOk':'endEarly',{force:true,ctx:{h:hm(miss)}}); break}
+    case 'water': {const k=dkey(now()), was=S.water[k]||0; S.water[k]=Math.max(0,was+(+v)*S.glass); save(); haptic(15); render(); if(was<S.waterGoal&&S.water[k]>=S.waterGoal) SB.say('water',{once:k}); break}
     case 'weightSheet': openSheet('weight'); break;
     case 'editWeight': openSheet('weight',{id:t.dataset.id}); break;
     case 'saveWeight': {const kg=num($('#wKg').value), d=new Date($('#wD').value+'T08:00').getTime();
       if(!kg||kg<25||kg>350||isNaN(d)){toast('Wpisz poprawną wagę');break}
-      const id=t.dataset.id; if(id){const w=S.weights.find(x=>x.id===id); w.kg=kg; w.d=d} else {S.weights=S.weights.filter(w=>dkey(w.d)!==dkey(d)); S.weights.push({id:rid('w'),d,kg})}
-      save(); closeSheet(); render(); break}
+      const id=t.dataset.id; let prev=null; if(id){const w=S.weights.find(x=>x.id===id); w.kg=kg; w.d=d} else {S.weights=S.weights.filter(w=>dkey(w.d)!==dkey(d)); prev=lastWeight(); if(prev&&prev.d>d) prev=null; S.weights.push({id:rid('w'),d,kg})}
+      save(); closeSheet(); render(); if(prev&&Math.abs(kg-prev.kg)>=0.1) SB.say(kg<prev.kg?'weightDown':'weightUp',{force:true,ctx:{d:fmt1(Math.abs(kg-prev.kg))}}); break}
     case 'delWeight': S.weights=S.weights.filter(w=>w.id!==t.dataset.id); save(); closeSheet(); render(); break;
     case 'peerBw': {const d=PEER.bwAt; S.weights=S.weights.filter(w=>dkey(w.d)!==dkey(d)); S.weights.push({id:rid('w'),d,kg:PEER.bw}); save(); render(); toast('Dodano wagę z Dziennika FBW'); break}
     case 'peerBwNo': S.dismissedPeerBw=PEER.bwAt; save(); render(); break;
@@ -1303,7 +1398,7 @@ document.addEventListener('click',e=>{
     case 'calM': {const d=new Date(); ui.calM=(ui.calM||d.getFullYear()*12+d.getMonth())+(+v); render(); break}
     case 'more': ui.histN=(ui.histN||40)+40; render(); break;
     case 'wRange': ui.wRange=+v; render(); break;
-    case 'sw': {const k=t.dataset.k; if(k==='sched') S.sched.on=!S.sched.on; else if(k==='schedRemind') S.sched.remind=!S.sched.remind; else S.notif[k]=!S.notif[k]; save(); render(); break}
+    case 'sw': {const k=t.dataset.k; if(k==='sbPeek') mz().peek=!mz().peek; else if(k==='sched') S.sched.on=!S.sched.on; else if(k==='schedRemind') S.sched.remind=!S.sched.remind; else S.notif[k]=!S.notif[k]; save(); render(); break}
     case 'schedPre': {const D=S.sched.days; if(v==='wk'){for(let d=0;d<7;d++)D[d]=(d===0||d===6)?'14:10':'16:8'} else if(v==='52'){for(let d=0;d<7;d++)D[d]=(d===1||d===4)?'20:4':'13:11'} else {for(let d=0;d<7;d++)D[d]=S.plan==='custom'?'16:8':S.plan} save(); render(); toast('Harmonogram ustawiony'); break}
     case 'askNotify': A&&A.askNotify(); break;
     case 'exact': A&&A.openExactSettings(); break;
@@ -1320,6 +1415,9 @@ document.addEventListener('click',e=>{
     case 'exInfo': openSheet('exInfo'); break;
     case 'badge': openSheet('badge',{i:+v}); break;
     case 'tipNext': ui.tipOff=(ui.tipOff||0)+1; render(); break;
+    case 'sbMode': mz().mode=v; save(); render(); if(v!=='off') SB.say('tap',{force:true}); else SB.hide(); break;
+    case 'sbTone': mz().tone=v; save(); render(); SB.say('tap',{force:true}); break;
+    case 'sbTest': if(mz().mode==='off'){mz().mode='normal'; save(); render();} SB.say('tap',{force:true}); break;
     case 'onboardDo': S.onboarded=true; save(); closeSheet(); render(); if(A&&A.notifyState&&A.notifyState()==='ask') A.askNotify(); break;
   }
 });
@@ -1343,7 +1441,7 @@ $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0]; if(!f) ret
 
 /* native hooks */
 window.onBack=()=>{if(ui.sheet&&ui.sheet.kind!=='onboard'){closeSheet();return true} if(ui.tab!=='today'){ui.tab='today';render();return true} return false};
-window.onNativeResume=()=>{loadPeer(); publish(); stepsFetch(); if(!ui.sheet) render()};
+window.onNativeResume=()=>{loadPeer(); publish(); stepsFetch(); if(!ui.sheet) render(); setTimeout(()=>{sbHello(); sbTick()},1200)};
 window.onNativeAction=act=>{
   ui.tab='today'; render();
   if(act==='start'&&!S.cur){const w=windowInfo(); openSheet('start',{at:w&&w.end<now()?w.end:now()})}
@@ -1357,6 +1455,7 @@ let lastDay=dkey(now()); setInterval(()=>{if(dkey(now())!==lastDay){lastDay=dkey
 if(!S.onboarded&&!S.fasts.length&&!S.cur) openSheet('onboard');
 else {try{const a=A&&A.takeAction&&A.takeAction(); if(a) window.onNativeAction(a)}catch(e){}}
 window.addEventListener('resize',tick);
+setTimeout(()=>{sbHello(); sbTick()},1500); setInterval(sbTick,15e3);
 </script>
 </body>
 </html>
